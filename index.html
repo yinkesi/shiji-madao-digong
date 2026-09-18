@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实验史记 · 马刀地宫</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ 标题屏 ============ -->
+  <div id="title-screen">
+    <div class="t-sup">据 音克思《实验史记》改编 · 终卷</div>
+    <h1 class="t-main">马刀地宫</h1>
+    <div class="t-sub">毕业之后，校园沉入地下，化作九层地宫。——既毕业，无复有刀者；然地下九层，刀声未绝。</div>
+    <div class="t-btns">
+      <button class="t-btn primary" id="btn-new">入宫 · 新的一轮</button>
+      <button class="t-btn" id="btn-resume">续行</button>
+      <button class="t-btn" id="btn-cult">修炼</button>
+      <button class="t-btn" id="btn-help">观卷 · 玩法</button>
+    </div>
+    <div class="t-meta">文脉 <b id="t-wemai">0</b> · 收卷 <span id="t-wins">0</span> 次 · 最深至第 <span id="t-floor">—</span> 层 · 名册 <span id="t-runners">1</span> 人</div>
+    <div class="t-foot">零依赖 · 双击即玩 · 进度自动保存</div>
+  </div>
+
+  <!-- ============ 入宫设置（选将 / 难度） ============ -->
+  <div id="setup-screen" class="screen hidden">
+    <h2 class="s-title">入宫</h2>
+    <div class="s-sec">点将出征 —— 谁执此刀？</div>
+    <div id="setup-runners" class="runner-grid"></div>
+    <div class="s-sec">难度 —— 敌之强度与文脉之倍率</div>
+    <div id="setup-diffs"></div>
+    <div class="s-btns">
+      <button class="t-btn primary" id="btn-start">开拔 · 入地宫</button>
+      <button class="t-btn" id="btn-setup-back">回题名</button>
+    </div>
+  </div>
+
+  <!-- ============ 游戏屏 ============ -->
+  <div id="game-screen" class="screen hidden">
+    <canvas id="cv"></canvas>
+    <div id="hud-top">
+      <div id="hud-floor"><span id="hud-floor-num">第一层</span><b id="hud-floor-name">跑道之下</b><span id="hud-rule" class="rule-tag"></span></div>
+      <div class="hud-bars">
+        <div class="bar hp"><div id="bar-hp"></div><span id="bar-hp-text">18/18</span></div>
+        <div class="bar sub"><div id="bar-emp"></div><span id="bar-shield"></span></div>
+      </div>
+      <div id="hud-money">钱 <b id="hud-cash">12</b> · 文脉 <b id="hud-wemai">0</b> · <span id="hud-kills">斩 0</span></div>
+      <div id="hud-btns">
+        <button class="hbtn" id="btn-bag" title="行囊（I）">行囊</button>
+        <button class="hbtn" id="btn-blades" title="刀谱（K）">刀谱</button>
+        <button class="hbtn" id="btn-dex" title="图鉴（J）">图鉴</button>
+        <button class="hbtn" id="btn-sys" title="设置（Esc）">系统</button>
+      </div>
+    </div>
+    <canvas id="minimap" width="156" height="120"></canvas>
+    <div id="skillbar"></div>
+    <div id="log"></div>
+    <div id="floor-card" class="hidden"><div id="fc-num"></div><div id="fc-name"></div><div id="fc-intro"></div></div>
+    <div id="boss-card" class="hidden"><div id="bc-name"></div><div id="bc-line"></div></div>
+  </div>
+
+  <!-- ============ 面板 ============ -->
+  <div id="panel-mask" class="hidden">
+    <div id="panel">
+      <div id="panel-head"><span id="panel-title"></span><button id="panel-close">✕</button></div>
+      <div id="panel-body"></div>
+    </div>
+  </div>
+
+  <!-- ============ 终局结算 ============ -->
+  <div id="end-screen" class="screen hidden">
+    <div id="end-box"></div>
+  </div>
+
+  <div id="toasts"></div>
+</div>
+
+<!-- 核心层（不碰 DOM，Node 可直测；顺序即依赖序） -->
+<script src="js/rng.js"></script>
+<script src="js/grid.js"></script>
+<script src="js/data.js"></script>
+<script src="js/gen.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/meta.js"></script>
+<script src="js/run.js"></script>
+<!-- 表现层 -->
+<script src="js/app.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/input.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

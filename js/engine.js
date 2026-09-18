@@ -59,6 +59,7 @@
       wemai: 0, firstClears: [], unlockedThisRun: [], achieveFlags: {},
       over: false, won: false, summary: null,
       map: null, player: null, enemies: [], floorDef: null, campUsed: false, key: false,
+      ev: [],
       rs: { a: MDG.RNG.seedOf(seed) ^ 0x9e3779b9 }
     };
     G.r = MDG.RNG.from(G.rs);
@@ -117,7 +118,7 @@
     /* 史官落点：出生宫室正中 */
     G.player.x = G.map.spawn[0]; G.player.y = G.map.spawn[1];
     if ((G.relics || []).includes("shield3")) G.player.st.shield += 3;
-    G.ev = [];
+    /* 注意：不清 G.ev——下行时 enterFloor 在 act() 中途被调，事件流必须保住 */
     log(G, "入第" + CN_NUM[floorIdx] + "层 · " + def.name);
     if (def.rule) log(G, "〔" + def.rule + "〕" + def.ruleDesc);
     log(G, def.intro);
