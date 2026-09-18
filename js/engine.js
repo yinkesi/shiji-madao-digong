@@ -389,9 +389,10 @@
           if (Gr.walkable(G.map, nx, ny) && !occupied(G, nx, ny) && !isSpecialTile(G, nx, ny)) { u.x = nx; u.y = ny; }
         }
       } else if (!u.boss) {
-        /* 脱离仇恨：久失其踪则弃追（镇守不弃——惊起必寻至） */
+        /* 脱离仇恨：久失其踪、或久追而不曾近身，则弃追（镇守不弃——惊起必寻至） */
         const seen = dMan <= u.saw + 4 && Gr.los(G.map, u.x, u.y, p.x, p.y);
-        if (seen) u.loseT = 0;
+        if (adj(u, p)) u.lastClose = G.round;
+        if (seen && (G.round - (u.lastClose || 0)) < 12) u.loseT = 0;
         else {
           u.loseT = (u.loseT || 0) + 1;
           if (u.loseT >= 6) { u.aggro = false; u.loseT = 0; ev(G, { t: "lost", uid: u.uid }); }
