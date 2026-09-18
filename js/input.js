@@ -144,6 +144,12 @@
   function onKeyDown(e) {
     if (e.repeat) return;
     const k = e.key;
+    /* 序章/尾声翻页优先 */
+    if (!$("prologue-screen").classList.contains("hidden")) {
+      if (k === " " || k === "Enter") { e.preventDefault(); MDG.Main.proNext(); }
+      else if (k === "Escape") MDG.Main.proSkip();
+      return;
+    }
     const inGame = game && game.G && !game.overShown;
     if (k === "Escape") {
       if (MDG.HUD.panelOpen()) { MDG.HUD.closePanel(); return; }

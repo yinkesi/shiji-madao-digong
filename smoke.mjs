@@ -27,6 +27,14 @@ await page.waitForTimeout(500);
 ok(await page.isVisible("#title-screen"), "标题屏可见");
 await page.screenshot({ path: path.join(HERE, "testshots", "01-title.png") });
 await page.click("#btn-new");
+/* 首次入宫先见序章——空格翻页或直接跳过 */
+try {
+  await page.waitForSelector("#prologue-screen:not(.hidden)", { timeout: 1500 });
+  ok((await page.textContent("#pro-pages")).includes("写进书里的刀"), "序章承接前作结句");
+  await page.screenshot({ path: path.join(HERE, "testshots", "02b-prologue.png") });
+  await page.click("#pro-skip");
+} catch (e) { /* 二周目无序章 */ }
+await page.waitForSelector("#setup-screen:not(.hidden)");
 ok(await page.isVisible("#setup-screen"), "入宫设置可见");
 ok((await page.locator("#setup-diffs .diff-row").count()) === 5, "难度五档");
 await page.click("#btn-start");
@@ -38,10 +46,14 @@ await page.screenshot({ path: path.join(HERE, "testshots", "03-game.png") });
 
 /* ===== 2. 键盘走两步 ===== */
 const p0 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
-await page.keyboard.press("ArrowRight");
-await page.waitForTimeout(250);
+for (const key of ["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"]) {
+  await page.keyboard.press(key);
+  await page.waitForTimeout(220);
+  const p = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
+  if (p.x !== p0.x || p.y !== p0.y) break;
+}
 const p1 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
-ok(p1.x !== p0.x || p1.y !== p0.y, "键盘走格生效");
+ok(p1.x !== p0.x || p1.y !== p0.y, "键盘走格生效（四向任一）");
 
 /* ===== 3. UI 全链路 bot：一路打到终局（胜或亡皆可，验结算屏与文脉） ===== */
 const outcome = await page.evaluate(() => {

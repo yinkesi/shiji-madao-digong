@@ -93,7 +93,7 @@
   function showBossCard(name) {
     const c = $("boss-card");
     $("bc-name").textContent = name;
-    $("bc-line").textContent = "镇守惊起——来呀来呀。";
+    $("bc-line").textContent = "记忆里的人不会让路——来呀来呀。";
     c.classList.remove("hidden");
     c.style.animation = "none"; void c.offsetWidth; c.style.animation = "";
     setTimeout(() => c.classList.add("hidden"), 2400);

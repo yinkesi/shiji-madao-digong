@@ -9,15 +9,30 @@
 <body>
 <div id="app">
 
+  <!-- ============ 序章（承前作 · 为何入宫） ============ -->
+  <div id="prologue-screen" class="screen hidden">
+    <div id="pro-box">
+      <div class="pro-sup">序</div>
+      <div id="pro-pages"></div>
+      <div class="pro-ctl">
+        <span id="pro-ind"></span>
+        <span class="pro-hint">空格 翻页</span>
+        <button class="t-btn" id="pro-skip">跳过</button>
+        <button class="t-btn primary" id="pro-next">翻页</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ 标题屏 ============ -->
   <div id="title-screen">
     <div class="t-sup">据 音克思《实验史记》改编 · 终卷</div>
     <h1 class="t-main">马刀地宫</h1>
-    <div class="t-sub">毕业之后，校园沉入地下，化作九层地宫。——既毕业，无复有刀者；然地下九层，刀声未绝。</div>
+    <div class="t-sub">重翻旧稿，梦入卷底——记忆化作九层地宫，人人还在原地。——既毕业，无复有刀者；然记忆九层，刀声未绝。</div>
     <div class="t-btns">
       <button class="t-btn primary" id="btn-new">入宫 · 新的一轮</button>
       <button class="t-btn" id="btn-resume">续行</button>
       <button class="t-btn" id="btn-cult">修炼</button>
+      <button class="t-btn" id="btn-why">序 · 为何入宫</button>
       <button class="t-btn" id="btn-help">观卷 · 玩法</button>
     </div>
     <div class="t-meta">文脉 <b id="t-wemai">0</b> · 收卷 <span id="t-wins">0</span> 次 · 最深至第 <span id="t-floor">—</span> 层 · 名册 <span id="t-runners">1</span> 人</div>
@@ -32,7 +47,7 @@
     <div class="s-sec">难度 —— 敌之强度与文脉之倍率</div>
     <div id="setup-diffs"></div>
     <div class="s-btns">
-      <button class="t-btn primary" id="btn-start">开拔 · 入地宫</button>
+      <button class="t-btn primary" id="btn-start">提刀 · 入梦</button>
       <button class="t-btn" id="btn-setup-back">回题名</button>
     </div>
   </div>

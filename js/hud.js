@@ -272,11 +272,11 @@
   }
 
   /* ---------------- 终局结算 ---------------- */
-  function showEnd(res) {
+  function showEnd(res, holdHidden) {
     const s = res.summary, r = res.result;
     const box = $("end-box");
     box.innerHTML = "";
-    const h2 = el("h2", s.won ? "" : "lost", s.won ? "刀史收卷" : "折于地下");
+    const h2 = el("h2", s.won ? "" : "lost", s.won ? "刀史收卷" : "搁笔");
     box.appendChild(h2);
     const add = (k, v) => box.appendChild(el("div", "line", `<span>${k}</span><b>${v}</b>`));
     add("所至", "第" + ["一", "二", "三", "四", "五", "六", "七", "八", "九"][Math.min(8, s.bestFloor - 1)] + "层 · " + s.floorName);
@@ -298,8 +298,8 @@
       box.appendChild(u);
     }
     box.appendChild(el("div", "yueks", s.won
-      ? "音克思曰：既毕业，无复有刀者，悲哉。然写进书里的刀，不会消。——九层收卷，此轮无憾。"
-      : "音克思曰：此轮之败，不足记也。文脉既积，修炼既成，明日再入宫。重开重开。"));
+      ? "音克思曰：梦醒天将亮，最后一卷落笔。不写刀，写刀后面的人——写进书里的，这次真的不会消了。"
+      : "音克思曰：写不动，不是忘得快，是想得深。此轮所想皆成文脉——明日再往下想。重开重开。"));
     const btns = el("div", "s-btns");
     const again = el("button", "t-btn primary", "再入宫");
     again.onclick = () => { location.hash = ""; window.MDG.Main.showSetup(); };
@@ -309,7 +309,7 @@
     back.onclick = () => window.MDG.Main.showTitle();
     btns.appendChild(again); btns.appendChild(cult); btns.appendChild(back);
     box.appendChild(btns);
-    $("end-screen").classList.remove("hidden");
+    if (!holdHidden) $("end-screen").classList.remove("hidden");
   }
 
   MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd };

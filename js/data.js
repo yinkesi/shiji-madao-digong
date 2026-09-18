@@ -193,23 +193,23 @@
    * shop: 有小卖部否。 */
   const FLOORS = [
     { n: 1, name: "跑道之下", rule: null, ruleDesc: "", boss: "wanzhen", elites: [], mobs: 3,
-      intro: "操场沉在地下第一层。跑道仍画着白线，只是再没有人跑。" },
+      intro: "梦从操场开始。白线还在，万震坐在跑道边等一道题——他说过，题来了才抬头。想往下走，先接他一刀。" },
     { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 4,
-      intro: "走廊坠入地底。三个人仍站成一排，像全校唯一会合唱的阵型。" },
+      intro: "走廊记得那三个人。异能者在梦里也不会让路，只会合唱——先分开他们，再面见大哥。" },
     { n: 3, name: "三国刀廊", rule: "chaos", ruleDesc: "党争：敌人二成机率打错人——同门相争，各怀鬼胎", boss: "luhao", elites: ["xiaochuan"], mobs: 4,
-      intro: "教室的课桌长进了土里。两把刀插在土中，像插着两面旗。" },
+      intro: "教室的课桌长进了土里，两把刀还插着。鲁豪在等一场没打完的架——记忆里的他，说过『急击勿失』。" },
     { n: 4, name: "协会堂", rule: "uprising", ruleDesc: "起义：琛半血之时，其二心腹必至", boss: "zichen", elites: ["guyin", "yiran"], mobs: 4, shop: true,
-      intro: "看台下那张折叠桌还在，纸上四个字：世界马刀协会。" },
+      intro: "折叠桌还在，『世界马刀协会』被摸得发亮。子琛从不商量：此为通知尔，非求建议也——他半血之时，记得留后手。" },
     { n: 5, name: "合流渊", rule: "stench", ruleDesc: "鲍鱼之肆：回合结束，相邻者互相腐蚀各损1血——贴身即换血", boss: "touge", elites: ["lifan", "limo"], mobs: 5, shop: true,
-      intro: "食堂的灯管在地底频闪。六班与七班之刀，在此合流。" },
+      intro: "食堂的灯管还在频闪。六班七班合流之处溴味不散——头哥的陀螺，在梦里也没停过。" },
     { n: 6, name: "禁令厅", rule: "suomen", ruleDesc: "锁门：击退之术失效；梯封两重——须斩钦法，并缴为兵之钥", boss: "qinfa", elites: ["weibing", "xiangdong"], mobs: 5, shop: true, gateExtra: ["weibing"],
-      intro: "办公楼二层。门关着，窗也关着。走廊里没有任何声音。" },
+      intro: "办公楼一层比一层静。钦法还在等一个解释，为兵的相机还没放下——这一层梯封两重，钥匙在别人身上。" },
     { n: 7, name: "神算之间", rule: "yansuan", ruleDesc: "验算：回合末，wonder 血量为偶则回2血——算好伤害，打成奇数", boss: "wonder", elites: ["wenbin", "wanzhen"], mobs: 5, shop: true,
-      intro: "图书馆的顶灯只剩一盏。地上有一道粉笔题：人也是题。" },
+      intro: "图书馆只剩一盏灯。wonder 把粉笔题画了一地：『人也是题。』——梦里他还不认输，验算从不出错。" },
     { n: 8, name: "崇国庭", rule: "zhongshu", ruleDesc: "种树不绝：每回合生树堵路（至多三株）——树亦可为汝挡刀", boss: "chongguo", elites: ["qinfa", "qiyue", "ziye"], mobs: 5, shop: true,
-      intro: "校长室沉在最深处。桌上没有茶，只有一摞卷宗。" },
+      intro: "校长室沉在最深处。卷宗合不上，树一茬一茬地长——记忆里的崇国，还在种他的树。" },
     { n: 9, name: "终焉之庭", rule: "cans", ruleDesc: "看台飞瓶：与敌同行或同列，回合初被砸1血——走位，别站线上", boss: "wonder", bossTag: "终焉", elites: ["dage", "shaoming"], mobs: 6,
-      intro: "校门口的梧桐叶落在铁门上。看台上空无一人，他们永远在看。" }
+      intro: "梧桐叶落在铁门上。看台空着，看的人永远在看——最后一战。写完它，就毕业。" }
   ];
 
   /* ---------------- 行囊 / 商摊 ---------------- */

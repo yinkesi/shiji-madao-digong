@@ -60,6 +60,21 @@ button { font-family: inherit; }
 .t-meta b { color: var(--gold); }
 .t-foot { color: #3d4a63; font-size: 12px; letter-spacing: .3em; margin-top: 16px; }
 
+/* ============ 序章 ============ */
+#prologue-screen { display: flex; align-items: center; justify-content: center; }
+#pro-box { max-width: 640px; padding: 30px 26px; }
+.pro-sup { color: var(--dim); letter-spacing: .6em; font-size: 14px; margin-bottom: 22px; text-align: center; }
+#pro-pages p {
+  color: var(--bone); font-size: 17px; line-height: 2.3; margin-bottom: 4px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  animation: propage .5s ease;
+}
+@keyframes propage { from { opacity: 0; transform: translateY(8px); } }
+.pro-ctl { display: flex; align-items: center; gap: 14px; margin-top: 30px; justify-content: flex-end; }
+#pro-ind { color: var(--dim); font-size: 13px; letter-spacing: .2em; }
+.pro-hint { color: #3d4a63; font-size: 12px; margin-right: auto; }
+.pro-ctl .t-btn { padding: 8px 18px; font-size: 14px; }
+
 /* ============ 入宫设置 ============ */
 .screen { position: absolute; inset: 0; overflow: auto; padding: 40px 24px; background: var(--night); }
 #setup-screen { max-width: 860px; margin: 0 auto; }
@@ -208,15 +223,30 @@ button { font-family: inherit; }
 <body>
 <div id="app">
 
+  <!-- ============ 序章（承前作 · 为何入宫） ============ -->
+  <div id="prologue-screen" class="screen hidden">
+    <div id="pro-box">
+      <div class="pro-sup">序</div>
+      <div id="pro-pages"></div>
+      <div class="pro-ctl">
+        <span id="pro-ind"></span>
+        <span class="pro-hint">空格 翻页</span>
+        <button class="t-btn" id="pro-skip">跳过</button>
+        <button class="t-btn primary" id="pro-next">翻页</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ 标题屏 ============ -->
   <div id="title-screen">
     <div class="t-sup">据 音克思《实验史记》改编 · 终卷</div>
     <h1 class="t-main">马刀地宫</h1>
-    <div class="t-sub">毕业之后，校园沉入地下，化作九层地宫。——既毕业，无复有刀者；然地下九层，刀声未绝。</div>
+    <div class="t-sub">重翻旧稿，梦入卷底——记忆化作九层地宫，人人还在原地。——既毕业，无复有刀者；然记忆九层，刀声未绝。</div>
     <div class="t-btns">
       <button class="t-btn primary" id="btn-new">入宫 · 新的一轮</button>
       <button class="t-btn" id="btn-resume">续行</button>
       <button class="t-btn" id="btn-cult">修炼</button>
+      <button class="t-btn" id="btn-why">序 · 为何入宫</button>
       <button class="t-btn" id="btn-help">观卷 · 玩法</button>
     </div>
     <div class="t-meta">文脉 <b id="t-wemai">0</b> · 收卷 <span id="t-wins">0</span> 次 · 最深至第 <span id="t-floor">—</span> 层 · 名册 <span id="t-runners">1</span> 人</div>
@@ -231,7 +261,7 @@ button { font-family: inherit; }
     <div class="s-sec">难度 —— 敌之强度与文脉之倍率</div>
     <div id="setup-diffs"></div>
     <div class="s-btns">
-      <button class="t-btn primary" id="btn-start">开拔 · 入地宫</button>
+      <button class="t-btn primary" id="btn-start">提刀 · 入梦</button>
       <button class="t-btn" id="btn-setup-back">回题名</button>
     </div>
   </div>
@@ -669,23 +699,23 @@ button { font-family: inherit; }
    * shop: 有小卖部否。 */
   const FLOORS = [
     { n: 1, name: "跑道之下", rule: null, ruleDesc: "", boss: "wanzhen", elites: [], mobs: 3,
-      intro: "操场沉在地下第一层。跑道仍画着白线，只是再没有人跑。" },
+      intro: "梦从操场开始。白线还在，万震坐在跑道边等一道题——他说过，题来了才抬头。想往下走，先接他一刀。" },
     { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 4,
-      intro: "走廊坠入地底。三个人仍站成一排，像全校唯一会合唱的阵型。" },
+      intro: "走廊记得那三个人。异能者在梦里也不会让路，只会合唱——先分开他们，再面见大哥。" },
     { n: 3, name: "三国刀廊", rule: "chaos", ruleDesc: "党争：敌人二成机率打错人——同门相争，各怀鬼胎", boss: "luhao", elites: ["xiaochuan"], mobs: 4,
-      intro: "教室的课桌长进了土里。两把刀插在土中，像插着两面旗。" },
+      intro: "教室的课桌长进了土里，两把刀还插着。鲁豪在等一场没打完的架——记忆里的他，说过『急击勿失』。" },
     { n: 4, name: "协会堂", rule: "uprising", ruleDesc: "起义：琛半血之时，其二心腹必至", boss: "zichen", elites: ["guyin", "yiran"], mobs: 4, shop: true,
-      intro: "看台下那张折叠桌还在，纸上四个字：世界马刀协会。" },
+      intro: "折叠桌还在，『世界马刀协会』被摸得发亮。子琛从不商量：此为通知尔，非求建议也——他半血之时，记得留后手。" },
     { n: 5, name: "合流渊", rule: "stench", ruleDesc: "鲍鱼之肆：回合结束，相邻者互相腐蚀各损1血——贴身即换血", boss: "touge", elites: ["lifan", "limo"], mobs: 5, shop: true,
-      intro: "食堂的灯管在地底频闪。六班与七班之刀，在此合流。" },
+      intro: "食堂的灯管还在频闪。六班七班合流之处溴味不散——头哥的陀螺，在梦里也没停过。" },
     { n: 6, name: "禁令厅", rule: "suomen", ruleDesc: "锁门：击退之术失效；梯封两重——须斩钦法，并缴为兵之钥", boss: "qinfa", elites: ["weibing", "xiangdong"], mobs: 5, shop: true, gateExtra: ["weibing"],
-      intro: "办公楼二层。门关着，窗也关着。走廊里没有任何声音。" },
+      intro: "办公楼一层比一层静。钦法还在等一个解释，为兵的相机还没放下——这一层梯封两重，钥匙在别人身上。" },
     { n: 7, name: "神算之间", rule: "yansuan", ruleDesc: "验算：回合末，wonder 血量为偶则回2血——算好伤害，打成奇数", boss: "wonder", elites: ["wenbin", "wanzhen"], mobs: 5, shop: true,
-      intro: "图书馆的顶灯只剩一盏。地上有一道粉笔题：人也是题。" },
+      intro: "图书馆只剩一盏灯。wonder 把粉笔题画了一地：『人也是题。』——梦里他还不认输，验算从不出错。" },
     { n: 8, name: "崇国庭", rule: "zhongshu", ruleDesc: "种树不绝：每回合生树堵路（至多三株）——树亦可为汝挡刀", boss: "chongguo", elites: ["qinfa", "qiyue", "ziye"], mobs: 5, shop: true,
-      intro: "校长室沉在最深处。桌上没有茶，只有一摞卷宗。" },
+      intro: "校长室沉在最深处。卷宗合不上，树一茬一茬地长——记忆里的崇国，还在种他的树。" },
     { n: 9, name: "终焉之庭", rule: "cans", ruleDesc: "看台飞瓶：与敌同行或同列，回合初被砸1血——走位，别站线上", boss: "wonder", bossTag: "终焉", elites: ["dage", "shaoming"], mobs: 6,
-      intro: "校门口的梧桐叶落在铁门上。看台上空无一人，他们永远在看。" }
+      intro: "梧桐叶落在铁门上。看台空着，看的人永远在看——最后一战。写完它，就毕业。" }
   ];
 
   /* ---------------- 行囊 / 商摊 ---------------- */
@@ -1233,7 +1263,7 @@ button { font-family: inherit; }
     }
     G.over = true; G.won = false;
     ev(G, { t: "dead" });
-    log(G, "史官折于地下。此轮至此。");
+    log(G, "笔滞于此，且搁笔——此轮所想，皆成文脉。");
   }
 
   /* ---------------- 起义特则：琛半血召心腹 ---------------- */
@@ -1611,7 +1641,7 @@ button { font-family: inherit; }
       /* 第九层斩毕 → 收卷 */
       G.over = true; G.won = true;
       ev(G, { t: "win" });
-      log(G, "刀史收卷。既毕业，无复有刀者——但写进书里的刀，不会消。");
+      log(G, "梦将醒。最后一卷落笔——刀史收卷。");
       return;
     }
     G.wemai += 3;
@@ -1757,6 +1787,7 @@ button { font-family: inherit; }
       dex: {},                         // chId -> 斩杀数
       scrolls: 0,
       achieves: {},
+      flags: {},                       // 序章已读等一次性标记
       stats: { runs: 0, wins: 0, bestFloor: 0 },
       settings: { muted: false, diffV: "normal", runner: "yinkesi" }
     };
@@ -2087,7 +2118,7 @@ button { font-family: inherit; }
   function showBossCard(name) {
     const c = $("boss-card");
     $("bc-name").textContent = name;
-    $("bc-line").textContent = "镇守惊起——来呀来呀。";
+    $("bc-line").textContent = "记忆里的人不会让路——来呀来呀。";
     c.classList.remove("hidden");
     c.style.animation = "none"; void c.offsetWidth; c.style.animation = "";
     setTimeout(() => c.classList.add("hidden"), 2400);
@@ -2567,11 +2598,11 @@ button { font-family: inherit; }
   }
 
   /* ---------------- 终局结算 ---------------- */
-  function showEnd(res) {
+  function showEnd(res, holdHidden) {
     const s = res.summary, r = res.result;
     const box = $("end-box");
     box.innerHTML = "";
-    const h2 = el("h2", s.won ? "" : "lost", s.won ? "刀史收卷" : "折于地下");
+    const h2 = el("h2", s.won ? "" : "lost", s.won ? "刀史收卷" : "搁笔");
     box.appendChild(h2);
     const add = (k, v) => box.appendChild(el("div", "line", `<span>${k}</span><b>${v}</b>`));
     add("所至", "第" + ["一", "二", "三", "四", "五", "六", "七", "八", "九"][Math.min(8, s.bestFloor - 1)] + "层 · " + s.floorName);
@@ -2593,8 +2624,8 @@ button { font-family: inherit; }
       box.appendChild(u);
     }
     box.appendChild(el("div", "yueks", s.won
-      ? "音克思曰：既毕业，无复有刀者，悲哉。然写进书里的刀，不会消。——九层收卷，此轮无憾。"
-      : "音克思曰：此轮之败，不足记也。文脉既积，修炼既成，明日再入宫。重开重开。"));
+      ? "音克思曰：梦醒天将亮，最后一卷落笔。不写刀，写刀后面的人——写进书里的，这次真的不会消了。"
+      : "音克思曰：写不动，不是忘得快，是想得深。此轮所想皆成文脉——明日再往下想。重开重开。"));
     const btns = el("div", "s-btns");
     const again = el("button", "t-btn primary", "再入宫");
     again.onclick = () => { location.hash = ""; window.MDG.Main.showSetup(); };
@@ -2604,7 +2635,7 @@ button { font-family: inherit; }
     back.onclick = () => window.MDG.Main.showTitle();
     btns.appendChild(again); btns.appendChild(cult); btns.appendChild(back);
     box.appendChild(btns);
-    $("end-screen").classList.remove("hidden");
+    if (!holdHidden) $("end-screen").classList.remove("hidden");
   }
 
   MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd };
@@ -2758,6 +2789,12 @@ button { font-family: inherit; }
   function onKeyDown(e) {
     if (e.repeat) return;
     const k = e.key;
+    /* 序章/尾声翻页优先 */
+    if (!$("prologue-screen").classList.contains("hidden")) {
+      if (k === " " || k === "Enter") { e.preventDefault(); MDG.Main.proNext(); }
+      else if (k === "Escape") MDG.Main.proSkip();
+      return;
+    }
     const inGame = game && game.G && !game.overShown;
     if (k === "Escape") {
       if (MDG.HUD.panelOpen()) { MDG.HUD.closePanel(); return; }
@@ -2813,9 +2850,44 @@ button { font-family: inherit; }
 
   const game = { G: null, meta: null, animating: false, overShown: false, busyAnim: false };
 
+  /* ---------------- 序章 / 尾声（记忆体的世界观） ----------------
+     承前作结句「写进书里的刀，不会消」——本作的地宫不是校园塌了，
+     是音克思为收最后一卷、梦入卷底：九层即九层记忆。 */
+  const PROLOGUE = [
+    "毕业那天，wonder 躺在校门口说：写完这一场，你就毕业了。\n我答：写进书里的刀，不会消。\n——话，是说满了。",
+    "回来收拾旧物的夜里，我摊开九卷旧稿，却写不出第十卷。\n写了三年的『事』：谁与谁战，胜负如何。\n可我记不清了——万震抬头时先看题还是先看人？\n仙女那一声『滚』，尾音有没有停顿？\n隔着的纸，终究不是人。",
+    "那夜我在旧教室睡着。梦里校园一层层往下沉：\n操场在最上，校门在最底；\n人人还在原地，做着各自记得的事——\n万震等题，wonder 验算，头哥的陀螺没有停。\n梦里的人不会老，也不会让路。要往下走，只得一刀一刀，重新赢过。",
+    "醒来天未亮，我忽然懂了最后一卷的写法：\n不写事，写人；不写刀，写刀后面的人。\n梦里每想对一处，笔下便多一行；想错的、想不动的，也不白想——都算文脉。\n于是提刀入梦。既毕业，无复有刀者——\n然记忆九层，刀声未绝。"
+  ];
+  const EPILOGUE = [
+    "梦醒。粉笔题被晨光擦得干干净净。\n旧稿摊在桌上，最后一卷恰好落笔：\n『wonder 者，最早讲规则之人也。\n刀后面的人，这一回，写清楚了。』",
+    "既毕业，无复有刀者——悲哉。\n然想清楚再写下来的刀，这次是真的不会消了。\n（刀已收，卷已合。九层记忆，来日可重走——重开重开。）"
+  ];
+  let proPages = null, proIdx = 0, proCb = null;
+  function showPages(pages, cb) {
+    proPages = pages; proIdx = 0; proCb = cb || null;
+    renderPage();
+    show("prologue-screen");
+  }
+  function renderPage() {
+    $("pro-pages").innerHTML = proPages[proIdx].split("\n").map(l => "<p>" + l + "</p>").join("");
+    $("pro-ind").textContent = (proIdx + 1) + " / " + proPages.length;
+    $("pro-next").textContent = proIdx === proPages.length - 1 ? "合上" : "翻页";
+  }
+  function proEnd(cb) {
+    proPages = null; proCb = null;
+    $("prologue-screen").classList.add("hidden");
+    if (cb) cb(); else showTitle();
+  }
+  function proNext() {
+    if (!proPages) return;
+    if (++proIdx >= proPages.length) proEnd(proCb); else renderPage();
+  }
+  function proSkip() { if (proPages) proEnd(proCb); }
+
   /* ---------------- 屏切换 ---------------- */
   function show(id) {
-    ["title-screen", "setup-screen", "game-screen", "end-screen"].forEach(s => $(s).classList.add("hidden"));
+    ["title-screen", "setup-screen", "game-screen", "end-screen", "prologue-screen"].forEach(s => $(s).classList.add("hidden"));
     $(id).classList.remove("hidden");
   }
 
@@ -2934,7 +3006,13 @@ button { font-family: inherit; }
   function finishRun() {
     const res = MDG.Run.finish(game.G);
     game.meta = res.meta;
-    MDG.HUD.showEnd(res);
+    if (res.summary.won) {
+      /* 收卷：先播「梦醒」尾声，再上结算 */
+      MDG.HUD.showEnd(res, true);      // 渲染但先不显示
+      showPages(EPILOGUE, () => { $("end-screen").classList.remove("hidden"); });
+    } else {
+      MDG.HUD.showEnd(res);
+    }
   }
 
   /* ---------------- 主循环 ---------------- */
@@ -2949,7 +3027,19 @@ button { font-family: inherit; }
     MDG.Input.init();
     const M = MDG.Meta.load();
     MDG.APP.setMuted(M.settings.muted);
-    $("btn-new").onclick = () => { game.meta = MDG.Meta.load(); showSetup(); };
+    $("btn-new").onclick = () => {
+      game.meta = MDG.Meta.load();
+      if (!game.meta.flags.prologueSeen) {
+        showPages(PROLOGUE, () => {
+          game.meta.flags.prologueSeen = true;
+          MDG.Meta.save(game.meta);
+          showSetup();
+        });
+      } else showSetup();
+    };
+    $("btn-why").onclick = () => showPages(PROLOGUE, showTitle);
+    $("pro-next").onclick = proNext;
+    $("pro-skip").onclick = proSkip;
     $("btn-resume").onclick = resumeRun;
     $("btn-cult").onclick = () => { game.meta = MDG.Meta.load(); MDG.HUD.bind(game); MDG.HUD.openCult(); };
     $("btn-help").onclick = () => { MDG.HUD.bind(game); MDG.HUD.openHelp(); };
@@ -2966,7 +3056,11 @@ button { font-family: inherit; }
   game.doAction = doAction;
   game.applyMetaBonuses = applyMetaBonuses;
 
-  MDG.Main = { boot, showTitle, showSetup, enterGame, get game() { return game; } };
+  MDG.Main = {
+    boot, showTitle, showSetup, enterGame,
+    proNext, proSkip, proActive: () => !!proPages,
+    get game() { return game; }
+  };
   addEventListener("DOMContentLoaded", boot);
 })();
 

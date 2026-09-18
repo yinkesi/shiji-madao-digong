@@ -26,6 +26,7 @@
       dex: {},                         // chId -> 斩杀数
       scrolls: 0,
       achieves: {},
+      flags: {},                       // 序章已读等一次性标记
       stats: { runs: 0, wins: 0, bestFloor: 0 },
       settings: { muted: false, diffV: "normal", runner: "yinkesi" }
     };
