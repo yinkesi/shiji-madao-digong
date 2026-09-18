@@ -114,6 +114,7 @@
     /* 噩梦之外的难档：目力增益已加，树等杂项不动 */
     G.scrollsTotal = places.scrolls.length;
     G.stairsOpen = false;
+    G._stairsOpen = false; // 渲染用缓存：每次 act 末刷新
     G.key = false;
     /* 史官落点：出生宫室正中 */
     G.player.x = G.map.spawn[0]; G.player.y = G.map.spawn[1];
@@ -147,6 +148,11 @@
     return [def.boss].concat(def.gateExtra || []);
   }
   function stairsOpenNow(G) {
+    /* 渲染与下行判定读行动末刷新的缓存；引擎内部结算走 computeStairs */
+    if (G._stairsOpen !== undefined) return G._stairsOpen;
+    return computeStairs(G);
+  }
+  function computeStairs(G) {
     const dead = (chId) => !G.enemies.some(u => u.chId === chId && !u.dead);
     return gateIds(G).every(dead);
   }
@@ -555,14 +561,16 @@
     }
     if (!G.over && !G.won) enemiesAct(G);
     if (!G.over) turnEnd(G);
-    /* 楼梯开了没有（镇守死绝） */
-    const open = stairsOpenNow(G);
+    /* 楼梯开了没有（镇守死绝）——现算并刷新渲染缓存 */
+    const open = computeStairs(G);
+    G._stairsOpen = open;
     if (open && !G.stairsOpen) {
       G.stairsOpen = true;
-      if (G.floorDef.gateExtra && !G.key) { /* 锁门层另行 */ }
       ev(G, { t: "stairsOpen" });
     }
-    if (!G.over && stairsOpenNow(G) && G.floorDef.rule === "suomen") G.key = true;
+    if (!G.over && open && G.floorDef.rule === "suomen") G.key = true;
+    /* 尸体清扫：亡者出列（存档与遍历都不再背负） */
+    for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
     G.round++;
     return evs.slice();
   }
@@ -782,20 +790,33 @@
   /* ---------------- 存取 ---------------- */
   function serialize(G) {
     const o = JSON.parse(JSON.stringify(G));
-    delete o.ev; delete o.r;
+    delete o.ev; delete o.r; delete o._visible;
     o.rs = G.r ? { a: G.r.state.a } : { a: 0 };
     return o;
+  }
+  /* 存档串：一次 stringify（_visible 可由地图+出生点推导，不入库；ev 清空） */
+  function saveString(G) {
+    const vis = G._visible, ev = G.ev;
+    G._visible = undefined; G.ev = [];
+    try { return JSON.stringify(G); } finally { G._visible = vis; G.ev = ev; }
   }
   function deserialize(o) {
     const G = JSON.parse(JSON.stringify(o));
     G.r = MDG.RNG.from(G.rs);
     G.ev = [];
+    /* uid 续号：新造单位不与存档单位撞号 */
+    let mx = UID;
+    [G.player].concat(G.enemies || []).forEach(u => {
+      const m = /^u(\d+)$/.exec(String(u && u.uid));
+      if (m) { const v = parseInt(m[1], 10) + 1; if (v > mx) mx = v; }
+    });
+    UID = mx;
     return G;
   }
 
   MDG.Engine = {
-    newRunState, enterFloor, act, serialize, deserialize,
-    unitAt, livingEnemies, stairsOpenNow, gateIds, strike, heal, addItem, log, ev,
+    newRunState, enterFloor, act, serialize, deserialize, saveString,
+    unitAt, livingEnemies, stairsOpenNow, computeStairs, gateIds, strike, heal, addItem, log, ev,
     /* 供表现层查询 */
     tileAt: (G, x, y) => G3().at(G.map, x, y)
   };

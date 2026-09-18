@@ -1070,6 +1070,7 @@ button { font-family: inherit; }
     /* 噩梦之外的难档：目力增益已加，树等杂项不动 */
     G.scrollsTotal = places.scrolls.length;
     G.stairsOpen = false;
+    G._stairsOpen = false; // 渲染用缓存：每次 act 末刷新
     G.key = false;
     /* 史官落点：出生宫室正中 */
     G.player.x = G.map.spawn[0]; G.player.y = G.map.spawn[1];
@@ -1103,6 +1104,11 @@ button { font-family: inherit; }
     return [def.boss].concat(def.gateExtra || []);
   }
   function stairsOpenNow(G) {
+    /* 渲染与下行判定读行动末刷新的缓存；引擎内部结算走 computeStairs */
+    if (G._stairsOpen !== undefined) return G._stairsOpen;
+    return computeStairs(G);
+  }
+  function computeStairs(G) {
     const dead = (chId) => !G.enemies.some(u => u.chId === chId && !u.dead);
     return gateIds(G).every(dead);
   }
@@ -1511,14 +1517,16 @@ button { font-family: inherit; }
     }
     if (!G.over && !G.won) enemiesAct(G);
     if (!G.over) turnEnd(G);
-    /* 楼梯开了没有（镇守死绝） */
-    const open = stairsOpenNow(G);
+    /* 楼梯开了没有（镇守死绝）——现算并刷新渲染缓存 */
+    const open = computeStairs(G);
+    G._stairsOpen = open;
     if (open && !G.stairsOpen) {
       G.stairsOpen = true;
-      if (G.floorDef.gateExtra && !G.key) { /* 锁门层另行 */ }
       ev(G, { t: "stairsOpen" });
     }
-    if (!G.over && stairsOpenNow(G) && G.floorDef.rule === "suomen") G.key = true;
+    if (!G.over && open && G.floorDef.rule === "suomen") G.key = true;
+    /* 尸体清扫：亡者出列（存档与遍历都不再背负） */
+    for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
     G.round++;
     return evs.slice();
   }
@@ -1738,20 +1746,33 @@ button { font-family: inherit; }
   /* ---------------- 存取 ---------------- */
   function serialize(G) {
     const o = JSON.parse(JSON.stringify(G));
-    delete o.ev; delete o.r;
+    delete o.ev; delete o.r; delete o._visible;
     o.rs = G.r ? { a: G.r.state.a } : { a: 0 };
     return o;
+  }
+  /* 存档串：一次 stringify（_visible 可由地图+出生点推导，不入库；ev 清空） */
+  function saveString(G) {
+    const vis = G._visible, ev = G.ev;
+    G._visible = undefined; G.ev = [];
+    try { return JSON.stringify(G); } finally { G._visible = vis; G.ev = ev; }
   }
   function deserialize(o) {
     const G = JSON.parse(JSON.stringify(o));
     G.r = MDG.RNG.from(G.rs);
     G.ev = [];
+    /* uid 续号：新造单位不与存档单位撞号 */
+    let mx = UID;
+    [G.player].concat(G.enemies || []).forEach(u => {
+      const m = /^u(\d+)$/.exec(String(u && u.uid));
+      if (m) { const v = parseInt(m[1], 10) + 1; if (v > mx) mx = v; }
+    });
+    UID = mx;
     return G;
   }
 
   MDG.Engine = {
-    newRunState, enterFloor, act, serialize, deserialize,
-    unitAt, livingEnemies, stairsOpenNow, gateIds, strike, heal, addItem, log, ev,
+    newRunState, enterFloor, act, serialize, deserialize, saveString,
+    unitAt, livingEnemies, stairsOpenNow, computeStairs, gateIds, strike, heal, addItem, log, ev,
     /* 供表现层查询 */
     tileAt: (G, x, y) => G3().at(G.map, x, y)
   };
@@ -1901,7 +1922,7 @@ button { font-family: inherit; }
 
   function saveRun(G) {
     if (!G || G.over) { MDG.Store.del(RUN_KEY); return; }
-    MDG.Store.set(RUN_KEY, JSON.stringify(MDG.Engine.serialize(G)));
+    MDG.Store.set(RUN_KEY, MDG.Engine.saveString(G));
   }
   function loadRun() {
     const raw = MDG.Store.get(RUN_KEY);
@@ -2024,16 +2045,21 @@ button { font-family: inherit; }
 </script>
 <script>
 /* ============================================================
- * 实验史记 · 马刀地宫 —— 丹青卷（Canvas 渲染）
- * 瓦片地宫 + 战争迷雾 + 字牌活体 + 浮动伤害 + 屏震 + 小地图。
- * 相机随人；迷雾三态：未探全黑 / 已探半暗 / 视野内明亮。
- * 挂载：MDG.UI（渲染器），HUD 面板另在 hud.js
+ * 实验史记 · 马刀地宫 —— 丹青卷（Canvas 渲染）· 预渲染管线
+ * 性能设计：
+ *   · 地形（墙/地/箱/史料/商摊/灶台/梯座）预渲染到离屏画布，
+ *     每帧一次 drawImage；仅当瓦片事件（碎树/开箱/熄灶/生树）才脏重绘。
+ *   · 明暗两片遮罩（视野暗化/未探全黑）随行动重建，每帧纯 blit。
+ *   · 小地图随行动缓存，每帧 blit。
+ *   · 浮字/刀光原地压实，不出垃圾。
+ * 每帧成本 ≈ 4 次 blit + 活体与特效，瓦片循环只在行动时发生。
+ * 挂载：MDG.UI（TILE 亦从此导出，input 共用此单一来源）
  * ============================================================ */
 (function () {
   "use strict";
   const MDG = window.MDG;
-  const { $, el } = MDG.APP;
-  const GRID = () => MDG.Grid, ENG = () => MDG.Engine;
+  const { $ } = MDG.APP;
+  const GRID = () => MDG.Grid;
 
   const TILE = 42;
   let cv = null, ctx = null, mm = null, mctx = null;
@@ -2042,8 +2068,12 @@ button { font-family: inherit; }
   let floats = [];   // {x, y, text, color, t0}
   let flashes = [];  // {x, y, t0}
   let slashes = [];  // {x0,y0,x1,y1,t0}
-  let armedSkill = -1; // 待发之技（点选目标模式）
-  let targetInfo = null;
+  let armedSkill = -1;
+
+  /* 离屏层：地形 / 视野暗化 / 未探全黑 / 小地图缓存 */
+  let terrain = null, visMask = null, fogMask = null, miniCache = null;
+  let builtFloor = -1, terrainDirty = false, fogDirty = true, miniDirty = true;
+  let campfires = []; // 火苗动态绘制，静态灶台在地形层
 
   function init() {
     if (MDG.UI._inited) return;
@@ -2058,48 +2088,104 @@ button { font-family: inherit; }
   function updateFov(G) {
     if (!G.explored) G.explored = {};
     const seen = GRID().fov(G.map, G.player.x, G.player.y, 8);
-    seen.forEach(([x, y]) => { G.explored[x + "," + y] = 1; });
+    let grew = false;
+    for (let i = 0; i < seen.length; i++) {
+      const k = seen[i][0] + "," + seen[i][1];
+      if (!G.explored[k]) { G.explored[k] = 1; grew = true; }
+    }
     G._visible = {};
-    seen.forEach(([x, y]) => { G._visible[x + "," + y] = 1; });
+    for (let i = 0; i < seen.length; i++) G._visible[seen[i][0] + "," + seen[i][1]] = 1;
+    if (grew) fogDirty = true;
+    miniDirty = true;
+    rebuildVisMask(G);
+    if (fogDirty) rebuildFogMask(G);
   }
 
-  function addFloat(G, x, y, text, color) { floats.push({ x, y, text, color: color || "#ece6d7", t0: performance.now() }); }
-  function addFlash(x, y) { flashes.push({ x, y, t0: performance.now() }); }
-  function addSlash(x0, y0, x1, y1) { slashes.push({ x0, y0, x1, y1, t0: performance.now() }); }
+  function mkCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+
+  /* ---- 地形层：静态瓦片一次画全 ---- */
+  function rebuildTerrain(G) {
+    const Gr = GRID();
+    terrain = mkCanvas(G.map.w * TILE, G.map.h * TILE);
+    const t = terrain.getContext("2d");
+    campfires = [];
+    for (let y = 0; y < G.map.h; y++) for (let x = 0; x < G.map.w; x++) {
+      drawTileStatic(t, G, x, y, Gr.at(G.map, x, y), campfires);
+    }
+    terrainDirty = false;
+  }
+
+  /* 视野暗化遮罩：全图半暗，视野格抠亮。每次行动重建。 */
+  function rebuildVisMask(G) {
+    if (!visMask || visMask.width !== G.map.w * TILE || visMask.height !== G.map.h * TILE)
+      visMask = mkCanvas(G.map.w * TILE, G.map.h * TILE);
+    const t = visMask.getContext("2d");
+    t.globalCompositeOperation = "source-over";
+    t.clearRect(0, 0, visMask.width, visMask.height);
+    t.fillStyle = "rgba(5,8,15,.62)";
+    t.fillRect(0, 0, visMask.width, visMask.height);
+    t.globalCompositeOperation = "destination-out";
+    for (const k in G._visible) {
+      const i = k.indexOf(",");
+      t.clearRect((+k.slice(0, i)) * TILE, (+k.slice(i + 1)) * TILE, TILE, TILE);
+    }
+    t.globalCompositeOperation = "source-over";
+  }
+
+  /* 未探遮罩：全图全黑，探过格抠空。探索增长时重建。 */
+  function rebuildFogMask(G) {
+    if (!fogMask || fogMask.width !== G.map.w * TILE || fogMask.height !== G.map.h * TILE)
+      fogMask = mkCanvas(G.map.w * TILE, G.map.h * TILE);
+    const t = fogMask.getContext("2d");
+    t.globalCompositeOperation = "source-over";
+    t.fillStyle = "#05080f";
+    t.fillRect(0, 0, fogMask.width, fogMask.height);
+    t.globalCompositeOperation = "destination-out";
+    for (const k in G.explored) {
+      const i = k.indexOf(",");
+      t.clearRect((+k.slice(0, i)) * TILE, (+k.slice(i + 1)) * TILE, TILE, TILE);
+    }
+    t.globalCompositeOperation = "source-over";
+    fogDirty = false;
+  }
+
+  /* ---- 视听素材登记 ---- */
+  function addFloat(x, y, text, color) { if (floats.length < 40) floats.push({ x, y, text, color: color || "#ece6d7", t0: performance.now() }); }
+  function addFlash(x, y) { if (flashes.length < 24) flashes.push({ x, y, t0: performance.now() }); }
+  function addSlash(x0, y0, x1, y1) { if (slashes.length < 12) slashes.push({ x0, y0, x1, y1, t0: performance.now() }); }
   function kick() { shake = Math.min(10, shake + 5); }
 
   /* ---- 事件 → 视听 ---- */
   function playEvents(G, evs) {
     const S = MDG.APP.sfx;
     let anyHit = false;
-    evs.forEach(e => {
+    for (let i = 0; i < evs.length; i++) {
+      const e = evs[i];
       switch (e.t) {
         case "hit":
-          addFloat(G, e.x, e.y, e.zero ? "格挡" : "-" + e.dmg, e.aura ? "#8aa04f" : (e.crit ? "#ecd39a" : "#e0705f"));
+          addFloat(e.x, e.y, e.zero ? "格挡" : "-" + e.dmg, e.aura ? "#8aa04f" : (e.crit ? "#ecd39a" : "#e0705f"));
           addFlash(e.x, e.y); anyHit = true;
           if (e.dmg >= 3) kick();
           break;
-        case "miss": addFloat(G, e.x, e.y, "闪", "#9aa7c4"); break;
-        case "heal": addFloat(G, e.x, e.y, "+" + e.val, "#7dc99a"); break;
-        case "shield": addFloat(G, e.x, e.y, "盾-" + e.val, "#c9a45f"); break;
-        case "blood": addFloat(G, e.x, e.y, "血祭！", "#c14b3a"); S.hit(); break;
-        case "die": addFloat(G, e.x, e.y, "倒", "#c14b3a"); S.kill(); break;
+        case "miss": addFloat(e.x, e.y, "闪", "#9aa7c4"); break;
+        case "heal": addFloat(e.x, e.y, "+" + e.val, "#7dc99a"); break;
+        case "shield": addFloat(e.x, e.y, "盾-" + e.val, "#c9a45f"); break;
+        case "blood": addFloat(e.x, e.y, "血祭！", "#c14b3a"); S.hit(); break;
+        case "die": addFloat(e.x, e.y, "倒", "#c14b3a"); S.kill(); break;
         case "learn": MDG.APP.toast("录技：「" + e.name + "」入谱"); S.learn(); break;
         case "relic": MDG.APP.toast("得刀卡「" + e.name + "」"); S.chest(); break;
         case "alert": if (e.boss) { showBossCard(e.name); S.boss(); } break;
-        case "bottle": addFloat(G, e.x, e.y, "砰！-1", "#c14b3a"); S.bottle(); kick(); break;
-        case "tree": S.eat(); break;
-        case "summon": addFloat(G, e.x, e.y, "起义！", "#c14b3a"); break;
-        case "camp": S.camp(); break;
-        case "chest": S.chest(); break;
-        case "scroll": addFloat(G, e.x, e.y, "史料+1", "#c9a45f"); S.coin(); break;
-        case "stairsOpen": MDG.APP.toast("楼梯已开——下行！"); break;
-        case "stairsLocked": S.ui(); break;
-        case "descend": S.stairs(); showFloorCard(G); break;
+        case "bottle": addFloat(e.x, e.y, "砰！-1", "#c14b3a"); S.bottle(); kick(); break;
+        case "descend": S.stairs(); showFloorCard(G); cam.init = false; break;
         case "win": S.win(); break;
         case "dead": S.dead(); break;
+        case "scroll": addFloat(e.x, e.y, "史料+1", "#c9a45f"); S.coin(); break;
+        case "stairsOpen": MDG.APP.toast("楼梯已开——下行！"); break;
+        case "tree": case "treebreak": case "chest": case "camp":
+          terrainDirty = true; // 瓦片变了：下一帧重铺地形
+          break;
       }
-    });
+    }
     if (anyHit) {
       const playerHit = evs.some(e => e.t === "hit" && G.player.x === e.x && G.player.y === e.y && !e.zero);
       if (playerHit) { S.hurt(); kick(); } else S.hit();
@@ -2124,155 +2210,73 @@ button { font-family: inherit; }
     setTimeout(() => c.classList.add("hidden"), 2400);
   }
 
-  /* ---- 主绘制 ---- */
-  function draw(G, now) {
-    if (!ctx) return;
-    const Gr = GRID();
-    const W = cv.width, H = cv.height;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = "#05080f";
-    ctx.fillRect(0, 0, W, H);
-    /* 相机缓动 */
-    const tx = G.player.x * TILE + TILE / 2, ty = G.player.y * TILE + TILE / 2;
-    if (!cam.init) { cam.x = tx; cam.y = ty; cam.init = true; }
-    cam.x += (tx - cam.x) * .18; cam.y += (ty - cam.y) * .18;
-    let sx = 0, sy = 0;
-    if (shake > 0) { shake *= .86; if (shake < .3) shake = 0; sx = (Math.random() * 2 - 1) * shake; sy = (Math.random() * 2 - 1) * shake; }
-    const ox = W / 2 / devicePixelRatio - cam.x + sx, oy = H / 2 / devicePixelRatio - cam.y + sy;
-    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, ox * devicePixelRatio, oy * devicePixelRatio);
-
-    const x0 = Math.max(0, Math.floor((0 - ox) / TILE) - 1), y0 = Math.max(0, Math.floor((0 - oy) / TILE) - 1);
-    const x1 = Math.min(G.map.w - 1, Math.ceil((W / devicePixelRatio - ox) / TILE) + 1), y1 = Math.min(G.map.h - 1, Math.ceil((H / devicePixelRatio - oy) / TILE) + 1);
-
-    /* 瓦片 */
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const vis = G._visible && G._visible[x + "," + y];
-      const exp = G.explored && G.explored[x + "," + y];
-      if (!vis && !exp) continue;
-      const t = Gr.at(G.map, x, y);
-      drawTile(G, x, y, t, vis);
-      if (!vis) { ctx.fillStyle = "rgba(5,8,15,.62)"; ctx.fillRect(x * TILE, y * TILE, TILE, TILE); }
-    }
-    /* cans 特则：同行同列的飞瓶预警 */
-    if (G.floorDef.rule === "cans") {
-      ctx.fillStyle = "rgba(193,75,58,.07)";
-      G.enemies.forEach(u => {
-        if (u.dead || u.chId === "tree") return;
-        if (u.x === G.player.x) ctx.fillRect(u.x * TILE, 0, TILE, G.map.h * TILE);
-        if (u.y === G.player.y) ctx.fillRect(0, u.y * TILE, G.map.w * TILE, TILE);
-      });
-    }
-    /* 施技目标高亮 */
-    if (armedSkill >= 0 && targetInfo) {
-      const sk = G.player.skills[armedSkill];
-      if (sk && sk.range) {
-        ctx.strokeStyle = "rgba(236,211,154,.5)";
-        for (let y = 0; y < G.map.h; y++) for (let x = 0; x < G.map.w; x++) {
-          const d = Gr.manh(G.player.x, G.player.y, x, y);
-          if (d > 0 && d <= sk.range && (G._visible[x + "," + y])) {
-            ctx.strokeRect(x * TILE + 3, y * TILE + 3, TILE - 6, TILE - 6);
-          }
-        }
-      }
-    }
-    /* 活体 */
-    G.enemies.forEach(u => {
-      if (u.dead) return;
-      if (!(G._visible && G._visible[u.x + "," + u.y])) return;
-      drawUnit(u, now, false);
-    });
-    if (!G.player.dead) drawUnit(G.player, now, true);
-
-    /* 刀光 */
-    slashes = slashes.filter(s => now - s.t0 < 160);
-    slashes.forEach(s => {
-      const k = (now - s.t0) / 160;
-      ctx.strokeStyle = "rgba(236,211,154," + (1 - k) * .9 + ")";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(s.x0 * TILE + TILE / 2, s.y0 * TILE + TILE / 2);
-      ctx.lineTo(s.x1 * TILE + TILE / 2, s.y1 * TILE + TILE / 2);
-      ctx.stroke();
-    });
-    /* 受击闪白 */
-    flashes = flashes.filter(f => now - f.t0 < 180);
-    flashes.forEach(f => {
-      const k = 1 - (now - f.t0) / 180;
-      ctx.fillStyle = "rgba(255,240,210," + k * .5 + ")";
-      ctx.fillRect(f.x * TILE, f.y * TILE, TILE, TILE);
-    });
-    /* 浮字 */
-    floats = floats.filter(f => now - f.t0 < 900);
-    floats.forEach(f => {
-      const k = (now - f.t0) / 900;
-      ctx.globalAlpha = 1 - k;
-      ctx.fillStyle = f.color;
-      ctx.font = "bold 16px serif";
-      ctx.textAlign = "center";
-      ctx.fillText(f.text, f.x * TILE + TILE / 2, f.y * TILE + TILE * .35 - k * 26);
-      ctx.globalAlpha = 1;
-    });
-    ctx.textAlign = "left";
-    drawMinimap(G);
-  }
-
-  function drawTile(G, x, y, t, vis) {
+  /* ---- 静态瓦片（进地形层） ---- */
+  function drawTileStatic(t, G, x, y, tile, campfiresOut) {
     const Gr = GRID();
     const px = x * TILE, py = y * TILE;
-    if (t === Gr.WALL) {
-      ctx.fillStyle = vis ? "#141c2f" : "#101627";
-      ctx.fillRect(px, py, TILE, TILE);
-      ctx.fillStyle = "rgba(0,0,0,.25)";
-      ctx.fillRect(px, py + TILE - 5, TILE, 5);
-      ctx.strokeStyle = "rgba(29,41,65,.6)";
-      ctx.strokeRect(px + .5, py + .5, TILE - 1, TILE - 1);
+    if (tile === Gr.WALL) {
+      t.fillStyle = "#141c2f";
+      t.fillRect(px, py, TILE, TILE);
+      t.fillStyle = "rgba(0,0,0,.25)";
+      t.fillRect(px, py + TILE - 5, TILE, 5);
+      t.strokeStyle = "rgba(29,41,65,.6)";
+      t.strokeRect(px + .5, py + .5, TILE - 1, TILE - 1);
       return;
     }
-    /* 地面 */
-    ctx.fillStyle = t === Gr.CORR ? "#0d1424" : "#111a2e";
-    ctx.fillRect(px, py, TILE, TILE);
-    ctx.strokeStyle = "rgba(29,41,65,.35)";
-    ctx.strokeRect(px + .5, py + .5, TILE - 1, TILE - 1);
-    if (t === Gr.STAIRS) {
-      const open = ENG().stairsOpenNow(G);
-      ctx.fillStyle = open ? "rgba(201,164,95,.2)" : "rgba(125,138,165,.08)";
-      ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
-      ctx.fillStyle = open ? "#ecd39a" : "#4a5570";
-      ctx.font = "20px serif"; ctx.textAlign = "center";
-      ctx.fillText(open ? "梯" : "锁", px + TILE / 2, py + TILE / 2 + 7);
-      ctx.textAlign = "left";
-    } else if (t === Gr.CHEST) {
-      ctx.fillStyle = "#6a4f2c"; ctx.fillRect(px + 7, py + 12, TILE - 14, TILE - 22);
-      ctx.fillStyle = "#c9a45f"; ctx.fillRect(px + 7, py + 12, TILE - 14, 5);
-      ctx.fillStyle = "#2c2014"; ctx.fillRect(px + TILE / 2 - 2, py + 19, 4, 7);
-    } else if (t === Gr.SCROLL) {
-      ctx.fillStyle = "#d8cba8"; ctx.fillRect(px + 12, py + 10, TILE - 24, TILE - 20);
-      ctx.fillStyle = "#8a3b3b"; ctx.fillRect(px + 12, py + 10, 4, TILE - 20);
-      ctx.fillStyle = "#5a4a2c"; ctx.font = "12px serif"; ctx.textAlign = "center";
-      ctx.fillText("史", px + TILE / 2 + 2, py + TILE / 2 + 4);
-      ctx.textAlign = "left";
-    } else if (t === Gr.CAMPFIRE) {
-      ctx.fillStyle = "#3a2c1c"; ctx.fillRect(px + 8, py + TILE - 14, TILE - 16, 6);
-      const f = 3 + Math.sin(performance.now() / 160 + x) * 1.5;
+    t.fillStyle = tile === Gr.CORR ? "#0d1424" : "#111a2e";
+    t.fillRect(px, py, TILE, TILE);
+    t.strokeStyle = "rgba(29,41,65,.35)";
+    t.strokeRect(px + .5, py + .5, TILE - 1, TILE - 1);
+    if (tile === Gr.CHEST) {
+      t.fillStyle = "#6a4f2c"; t.fillRect(px + 7, py + 12, TILE - 14, TILE - 22);
+      t.fillStyle = "#c9a45f"; t.fillRect(px + 7, py + 12, TILE - 14, 5);
+      t.fillStyle = "#2c2014"; t.fillRect(px + TILE / 2 - 2, py + 19, 4, 7);
+    } else if (tile === Gr.SCROLL) {
+      t.fillStyle = "#d8cba8"; t.fillRect(px + 12, py + 10, TILE - 24, TILE - 20);
+      t.fillStyle = "#8a3b3b"; t.fillRect(px + 12, py + 10, 4, TILE - 20);
+      t.fillStyle = "#5a4a2c"; t.font = "12px serif"; t.textAlign = "center";
+      t.fillText("史", px + TILE / 2 + 2, py + TILE / 2 + 4);
+      t.textAlign = "left";
+    } else if (tile === Gr.CAMPFIRE) {
+      t.fillStyle = "#3a2c1c"; t.fillRect(px + 8, py + TILE - 14, TILE - 16, 6);
+      campfiresOut.push([x, y]);
+    } else if (tile === Gr.SHOP) {
+      t.fillStyle = "#26402f"; t.fillRect(px + 5, py + 10, TILE - 10, TILE - 18);
+      t.fillStyle = "#c9a45f"; t.font = "16px serif"; t.textAlign = "center";
+      t.fillText("贾", px + TILE / 2, py + TILE / 2 + 5);
+      t.textAlign = "left";
+    }
+  }
+
+  /* ---- 动态瓦片（每帧画，量极少） ---- */
+  function drawStairs(G) {
+    const open = !!G._stairsOpen;
+    const [sx, sy] = G.map.stairs;
+    const px = sx * TILE, py = sy * TILE;
+    ctx.fillStyle = open ? "rgba(201,164,95,.2)" : "rgba(125,138,165,.08)";
+    ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+    ctx.fillStyle = open ? "#ecd39a" : "#4a5570";
+    ctx.font = "20px serif"; ctx.textAlign = "center";
+    ctx.fillText(open ? "梯" : "锁", px + TILE / 2, py + TILE / 2 + 7);
+    ctx.textAlign = "left";
+  }
+  function drawCampfires(now) {
+    for (let i = 0; i < campfires.length; i++) {
+      const [x, y] = campfires[i];
+      const px = x * TILE, py = y * TILE;
+      const f = 3 + Math.sin(now / 160 + x) * 1.5;
       ctx.fillStyle = "rgba(230,140,60,.9)";
       ctx.beginPath(); ctx.arc(px + TILE / 2, py + TILE - 18, 5 + f, 0, 7); ctx.fill();
       ctx.fillStyle = "rgba(236,211,154,.9)";
       ctx.beginPath(); ctx.arc(px + TILE / 2, py + TILE - 19, 2.5 + f * .5, 0, 7); ctx.fill();
-    } else if (t === Gr.SHOP) {
-      ctx.fillStyle = "#26402f"; ctx.fillRect(px + 5, py + 10, TILE - 10, TILE - 18);
-      ctx.fillStyle = "#c9a45f"; ctx.font = "16px serif"; ctx.textAlign = "center";
-      ctx.fillText("贾", px + TILE / 2, py + TILE / 2 + 5);
-      ctx.textAlign = "left";
     }
   }
 
   function drawUnit(u, now, isPlayer) {
     const px = u.x * TILE, py = u.y * TILE;
     const bob = Math.sin(now / 300 + u.x * 3) * 1.2;
-    /* 影 */
     ctx.fillStyle = "rgba(0,0,0,.4)";
     ctx.beginPath(); ctx.ellipse(px + TILE / 2, py + TILE - 6, 13, 5, 0, 0, 7); ctx.fill();
-    /* 体 */
     const r = 14;
     ctx.fillStyle = u.color;
     ctx.strokeStyle = isPlayer ? "#ecd39a" : (u.boss ? "#c14b3a" : "rgba(0,0,0,.4)");
@@ -2281,19 +2285,17 @@ button { font-family: inherit; }
     if (ctx.roundRect) ctx.roundRect(px + TILE / 2 - r, py + 6 + bob, r * 2, r * 2, 7);
     else ctx.rect(px + TILE / 2 - r, py + 6 + bob, r * 2, r * 2);
     ctx.fill(); ctx.stroke();
-    /* 字牌 */
     ctx.fillStyle = "#fff";
     ctx.font = "bold 17px serif"; ctx.textAlign = "center";
     ctx.fillText(u.glyph, px + TILE / 2, py + 6 + bob + 23);
     ctx.textAlign = "left";
-    /* 血条 */
     const w = TILE - 12, hpr = Math.max(0, u.hp / u.maxHp);
     ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(px + 6, py + TILE - 3, w, 3);
     ctx.fillStyle = hpr > .5 ? "#7dc99a" : (hpr > .25 ? "#d0a04f" : "#c14b3a");
     ctx.fillRect(px + 6, py + TILE - 3, w * hpr, 3);
-    /* 状态角标 */
     let ix = 0;
-    const mark = (txt, color) => { ctx.fillStyle = color; ctx.font = "10px serif"; ctx.fillText(txt, px + 4 + ix * 11, py + 12); ix++; };
+    ctx.font = "10px serif";
+    const mark = (txt, color) => { ctx.fillStyle = color; ctx.fillText(txt, px + 4 + ix * 11, py + 12); ix++; };
     if (u.st.shield > 0) mark("盾", "#c9a45f");
     if (u.st.poison > 0) mark("毒", "#8aa04f");
     if (u.st.stun > 0) mark("晕", "#9aa7c4");
@@ -2302,24 +2304,138 @@ button { font-family: inherit; }
     if (isPlayer && u.st.buffKnife > 0) mark("棒", "#d0a04f");
   }
 
-  function drawMinimap(G) {
-    if (!mctx) return;
+  /* ---- 小地图：随行动缓存，每帧 blit ---- */
+  function rebuildMini(G) {
     const Gr = GRID();
+    if (!miniCache) miniCache = mkCanvas(mm.width, mm.height);
+    const t = miniCache.getContext("2d");
+    t.fillStyle = "rgba(7,11,20,1)"; t.fillRect(0, 0, mm.width, mm.height);
     const s = Math.min(mm.width / G.map.w, mm.height / G.map.h);
-    mctx.fillStyle = "rgba(7,11,20,1)"; mctx.fillRect(0, 0, mm.width, mm.height);
     for (let y = 0; y < G.map.h; y++) for (let x = 0; x < G.map.w; x++) {
       if (!G.explored || !G.explored[x + "," + y]) continue;
-      const t = Gr.at(G.map, x, y);
-      mctx.fillStyle = t === Gr.WALL ? "#141c2f" : "#232f4d";
-      mctx.fillRect(x * s, y * s, s, s);
-      if (t === Gr.STAIRS) { mctx.fillStyle = "#c9a45f"; mctx.fillRect(x * s, y * s, s, s); }
-      if (t === Gr.CAMPFIRE) { mctx.fillStyle = "#d08a4f"; mctx.fillRect(x * s, y * s, s, s); }
+      const v = Gr.at(G.map, x, y);
+      t.fillStyle = v === Gr.WALL ? "#141c2f" : "#232f4d";
+      t.fillRect(x * s, y * s, s, s);
+      if (v === Gr.STAIRS) { t.fillStyle = "#c9a45f"; t.fillRect(x * s, y * s, s, s); }
+      if (v === Gr.CAMPFIRE) { t.fillStyle = "#d08a4f"; t.fillRect(x * s, y * s, s, s); }
+      if (v === Gr.SHOP) { t.fillStyle = "#7dc99a"; t.fillRect(x * s, y * s, s, s); }
     }
+    miniDirty = false;
+  }
+
+  /* ---- 主绘制：四次 blit + 活体特效 ---- */
+  function draw(G, now) {
+    if (!ctx) return;
+    if (builtFloor !== G.floorIdx || terrainDirty || !terrain) {
+      rebuildTerrain(G); builtFloor = G.floorIdx;
+      rebuildFogMask(G); rebuildMini(G); fogDirty = false; miniDirty = false;
+    }
+    const W = cv.width, H = cv.height, dpr = devicePixelRatio;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#05080f";
+    ctx.fillRect(0, 0, W, H);
+    const tx = G.player.x * TILE + TILE / 2, ty = G.player.y * TILE + TILE / 2;
+    if (!cam.init) { cam.x = tx; cam.y = ty; cam.init = true; }
+    cam.x += (tx - cam.x) * .18; cam.y += (ty - cam.y) * .18;
+    let sx = 0, sy = 0;
+    if (shake > 0) { shake *= .86; if (shake < .3) shake = 0; sx = (Math.random() * 2 - 1) * shake; sy = (Math.random() * 2 - 1) * shake; }
+    const ox = W / dpr / 2 - cam.x + sx, oy = H / dpr / 2 - cam.y + sy;
+    ctx.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
+
+    /* 三层 blit：地形 → 火光/梯（动态瓦片） → 视野暗化 → 未探全黑 */
+    ctx.drawImage(terrain, 0, 0);
+    drawStairs(G);
+    drawCampfires(now);
+    ctx.drawImage(visMask, 0, 0);
+    ctx.drawImage(fogMask, 0, 0);
+
+    /* cans 飞瓶预警线 */
+    if (G.floorDef.rule === "cans") {
+      ctx.fillStyle = "rgba(193,75,58,.07)";
+      const p = G.player;
+      const es = G.enemies;
+      for (let i = 0; i < es.length; i++) {
+        const e = es[i];
+        if (e.dead || e.chId === "tree") continue;
+        if (e.x === p.x) ctx.fillRect(e.x * TILE, 0, TILE, G.map.h * TILE);
+        else if (e.y === p.y) ctx.fillRect(0, e.y * TILE, G.map.w * TILE, TILE);
+      }
+    }
+    /* 施技射程高亮 */
+    if (armedSkill >= 0) {
+      const sk = G.player.skills[armedSkill];
+      if (sk && sk.range) {
+        ctx.strokeStyle = "rgba(236,211,154,.5)";
+        const p = G.player;
+        for (let y = 1; y < G.map.h - 1; y++) for (let x = 1; x < G.map.w - 1; x++) {
+          const d = Math.abs(x - p.x) + Math.abs(y - p.y);
+          if (d > 0 && d <= sk.range && G._visible[x + "," + y]) ctx.strokeRect(x * TILE + 3, y * TILE + 3, TILE - 6, TILE - 6);
+        }
+      }
+    }
+    /* 活体 */
+    for (let i = 0; i < G.enemies.length; i++) {
+      const u = G.enemies[i];
+      if (u.dead || !(G._visible && G._visible[u.x + "," + u.y])) continue;
+      drawUnit(u, now, false);
+    }
+    if (!G.player.dead) drawUnit(G.player, now, true);
+
+    /* 刀光（原地压实） */
+    let w = 0;
+    for (let i = 0; i < slashes.length; i++) {
+      const s = slashes[i], k = (now - s.t0) / 160;
+      if (k >= 1) continue;
+      slashes[w++] = s;
+      ctx.strokeStyle = "rgba(236,211,154," + (1 - k) * .9 + ")";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(s.x0 * TILE + TILE / 2, s.y0 * TILE + TILE / 2);
+      ctx.lineTo(s.x1 * TILE + TILE / 2, s.y1 * TILE + TILE / 2);
+      ctx.stroke();
+    }
+    slashes.length = w;
+    /* 受击闪白 */
+    w = 0;
+    for (let i = 0; i < flashes.length; i++) {
+      const f = flashes[i], k = 1 - (now - f.t0) / 180;
+      if (k < 0) continue;
+      flashes[w++] = f;
+      ctx.fillStyle = "rgba(255,240,210," + k * .5 + ")";
+      ctx.fillRect(f.x * TILE, f.y * TILE, TILE, TILE);
+    }
+    flashes.length = w;
+    /* 浮字 */
+    w = 0;
+    for (let i = 0; i < floats.length; i++) {
+      const f = floats[i], k = (now - f.t0) / 900;
+      if (k >= 1) continue;
+      floats[w++] = f;
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = f.color;
+      ctx.font = "bold 16px serif";
+      ctx.textAlign = "center";
+      ctx.fillText(f.text, f.x * TILE + TILE / 2, f.y * TILE + TILE * .35 - k * 26);
+    }
+    floats.length = w;
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+
+    /* 小地图 blit */
+    if (miniDirty) rebuildMini(G);
+    mctx.clearRect(0, 0, mm.width, mm.height);
+    mctx.drawImage(miniCache, 0, 0);
+    const s = Math.min(mm.width / G.map.w, mm.height / G.map.h);
     mctx.fillStyle = "#ecd39a";
     mctx.fillRect(G.player.x * s - 1, G.player.y * s - 1, s + 2, s + 2);
   }
 
-  MDG.UI = { init, draw, playEvents, updateFov, addFloat, kick, showFloorCard, getCam: () => cam, armed: { get: () => armedSkill, set: (v) => { armedSkill = v; targetInfo = v >= 0 ? {} : null; } } };
+  MDG.UI = {
+    init, draw, playEvents, updateFov, addFloat, kick, showFloorCard,
+    getCam: () => cam,
+    TILE,
+    armed: { get: () => armedSkill, set: (v) => { armedSkill = v; } }
+  };
 })();
 
 </script>
@@ -2697,8 +2813,9 @@ button { font-family: inherit; }
     const G = game.G;
     const { cam } = getCam();
     const dpr = devicePixelRatio;
-    const wx = Math.floor((mx - (cv.width / dpr / 2 - cam.x)) / 42);
-    const wy = Math.floor((my - (cv.height / dpr / 2 - cam.y)) / 42);
+    const TILE = MDG.UI.TILE;
+    const wx = Math.floor((mx - (cv.width / dpr / 2 - cam.x)) / TILE);
+    const wy = Math.floor((my - (cv.height / dpr / 2 - cam.y)) / TILE);
     if (!MDG.Grid.inB(G.map, wx, wy)) return;
     /* 掷物模式 */
     if (itemArmed >= 0) {

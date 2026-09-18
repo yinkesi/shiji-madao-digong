@@ -25,7 +25,7 @@
 
   function saveRun(G) {
     if (!G || G.over) { MDG.Store.del(RUN_KEY); return; }
-    MDG.Store.set(RUN_KEY, JSON.stringify(MDG.Engine.serialize(G)));
+    MDG.Store.set(RUN_KEY, MDG.Engine.saveString(G));
   }
   function loadRun() {
     const raw = MDG.Store.get(RUN_KEY);

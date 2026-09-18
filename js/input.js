@@ -52,8 +52,9 @@
     const G = game.G;
     const { cam } = getCam();
     const dpr = devicePixelRatio;
-    const wx = Math.floor((mx - (cv.width / dpr / 2 - cam.x)) / 42);
-    const wy = Math.floor((my - (cv.height / dpr / 2 - cam.y)) / 42);
+    const TILE = MDG.UI.TILE;
+    const wx = Math.floor((mx - (cv.width / dpr / 2 - cam.x)) / TILE);
+    const wy = Math.floor((my - (cv.height / dpr / 2 - cam.y)) / TILE);
     if (!MDG.Grid.inB(G.map, wx, wy)) return;
     /* 掷物模式 */
     if (itemArmed >= 0) {
