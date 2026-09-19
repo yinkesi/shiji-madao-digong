@@ -437,10 +437,10 @@
           }
         }
       } else if (!u.boss) {
-        /* 脱离仇恨：久失其踪、或久追而不曾近身，则弃追（镇守不弃——惊起必寻至） */
+        /* 脱离仇恨：仅当连续 6 回合失去视线才弃追（镇守不弃——惊起必寻至）。
+           （旧版「久追未近身也弃追」会让远程敌看得见你却隔轮行动并反复惊起——已废） */
         const seen = dMan <= u.saw + 4 && Gr.los(G.map, u.x, u.y, p.x, p.y);
-        if (adj(u, p)) u.lastClose = G.round;
-        if (seen && (G.round - (u.lastClose || 0)) < 12) u.loseT = 0;
+        if (seen) u.loseT = 0;
         else {
           u.loseT = (u.loseT || 0) + 1;
           if (u.loseT >= 6) { u.aggro = false; u.loseT = 0; ev(G, { t: "lost", uid: u.uid }); }
@@ -600,7 +600,7 @@
       if (action.t === "move") doMove(G, p, action.dx, action.dy);
       else if (action.t === "skill") doSkill(G, p, action.si, action.tx, action.ty);
       else if (action.t === "item") doItem(G, p, action.ii, action.tx, action.ty);
-      else if (action.t === "wait") { log(G, "汝按刀不动。（待机）"); }
+      else if (action.t === "wait") { if (!action.auto) log(G, "汝按刀不动。（待机）"); }
       /* 兜底 */
     }
     if (!G.over && !G.won) enemiesAct(G);

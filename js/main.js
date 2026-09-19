@@ -163,6 +163,7 @@
       setTimeout(() => finishRun(), 900);
     }
     if (done) done();
+    armIdle();
   }
 
   function finishRun() {
@@ -182,6 +183,24 @@
   function loop(now) {
     if (game.G) MDG.UI.draw(game.G, now || performance.now());
     requestAnimationFrame(loop);
+  }
+
+  /* ---------------- 闲置自动待机：静立约一息，时间自流（世界不等人） ---------------- */
+  let idleTimer = null;
+  const IDLE_MS = 950;
+  function idleBlocked() {
+    return !game.G || game.overShown || MDG.HUD.panelOpen() ||
+      !$("prologue-screen").classList.contains("hidden") ||
+      MDG.UI.armed.get() >= 0 || (MDG.Input.pending && MDG.Input.pending()) ||
+      (MDG.Input.cursorActive && MDG.Input.cursorActive()) ||
+      (MDG.Input.autoActive && MDG.Input.autoActive()) || document.hidden;
+  }
+  function armIdle() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (idleBlocked()) { armIdle(); return; }
+      doAction({ t: "wait", auto: true });
+    }, IDLE_MS);
   }
 
   /* ---------------- 装配 ---------------- */
@@ -214,6 +233,10 @@
     $("btn-dex").onclick = () => MDG.HUD.openDex();
     $("btn-sys").onclick = () => MDG.HUD.openSys();
     MDG.HUD.bind(game);
+    addEventListener("keydown", armIdle);
+    $("cv").addEventListener("click", armIdle);
+    addEventListener("pointerdown", armIdle);
+    armIdle();
     showTitle();
   }
 

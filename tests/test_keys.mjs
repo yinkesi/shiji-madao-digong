@@ -179,6 +179,14 @@ console.log("8 H 帮助:", helpTxt.includes("目标") ? "OK" : "FAIL「" + helpT
   console.log("8d J 自动转向:", (before.facing[0] === 1 && r3.dmg3 >= 2 && r3.facing[0] === -1) ? "OK（面朝右，转身打了左侧敌 " + r3.dmg3 + " 伤）" : "FAIL " + JSON.stringify([before, r3]));
 }
 
+// 8e) 闲置自动待机：静立 2.3 秒，时间自流（轮次推进、世界不等人）
+{
+  const r0 = await page.evaluate(() => ({ round: MDG.Main.game.G.round }));
+  await page.waitForTimeout(2300);
+  const r1 = await page.evaluate(() => ({ round: MDG.Main.game.G.round }));
+  console.log("8e 静立时间自流:", r1.round > r0.round ? "OK（轮 " + r0.round + "→" + r1.round + "）" : "FAIL " + JSON.stringify([r0, r1]));
+}
+
 // 9) 全程无页面错误
 console.log("9 页面错误:", errs.length ? "FAIL " + errs.join(" | ") : "OK（无）");
 await page.screenshot({ path: "testshots/keys-final.png" });

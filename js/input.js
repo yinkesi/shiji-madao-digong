@@ -365,6 +365,8 @@
   MDG.Input = {
     bind, init, act, onSkillKey, armItem, cancelAuto,
     facing: () => facing.slice(),
-    cursorActive, cursorPos: () => (Array.isArray(cursor) ? cursor.slice() : null), cursorMode: () => cursorMode
+    cursorActive, cursorPos: () => (Array.isArray(cursor) ? cursor.slice() : null), cursorMode: () => cursorMode,
+    pending: () => MDG.UI.armed.get() >= 0 || itemArmed >= 0,
+    autoActive: () => !!autoWalk
   };
 })();
