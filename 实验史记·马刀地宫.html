@@ -1159,7 +1159,8 @@ button { font-family: inherit; }
     if (att.side === "p" && def.side === "e" && def.telegraph && !def.dead) {
       dmg += 2;
       def._parried = true;
-      def.parryCd = 2;
+      def.parries = (def.parries || 0) + 1;
+      def.parryCd = Math.min(4, 1 + def.parries); /* 戒备逐次加长：1→2→3 回合 */
       def.telegraph = false;
       ev(G, { t: "parry", x: def.x, y: def.y, name: def.name });
       log(G, "弹反！" + def.name + "的攻势被荡开——其本回合失措。");
@@ -1341,6 +1342,8 @@ button { font-family: inherit; }
   }
 
   /* ---------------- 回合开始（特则） ---------------- */
+  /* 亮刀破绽的出现率：可遇不可求，弹反才有价值（测试可钉为 0/1） */
+  let teleChance = 0.45;
   function roundStart(G) {
     G._firstKnifeUsed = false;
     G.enemies.forEach(u => { u.firstHitTaken = false; });
@@ -1350,7 +1353,7 @@ button { font-family: inherit; }
       if (u.parryCd > 0) u.parryCd--;
       const was = u.telegraph;
       u.telegraph = !u.dead && u.aggro && u.st.stun === 0 && !(u.parryCd > 0) && !p.dead &&
-        G3().manh(u.x, u.y, p.x, p.y) === 1;
+        G3().manh(u.x, u.y, p.x, p.y) === 1 && G.r.chance(teleChance);
       if (u.telegraph && !was) {
         ev(G, { t: "telegraph", x: u.x, y: u.y, name: u.name });
         const T = G.tut || (G.tut = {});
@@ -1866,7 +1869,9 @@ button { font-family: inherit; }
     newRunState, enterFloor, act, serialize, deserialize, saveString,
     unitAt, livingEnemies, stairsOpenNow, computeStairs, gateIds, strike, heal, addItem, log, ev,
     /* 供表现层查询 */
-    tileAt: (G, x, y) => G3().at(G.map, x, y)
+    tileAt: (G, x, y) => G3().at(G.map, x, y),
+    setTeleChance: (v) => { teleChance = v; },
+    getTeleChance: () => teleChance
   };
 })(typeof window !== "undefined" ? window : globalThis);
 
@@ -2991,7 +2996,7 @@ button { font-family: inherit; }
     stairsLocked: "前方是【楼梯】——被镇守封着；先寻镇守斩之，梯方开",
     stairsOpen: "【楼梯已开】——站上楼梯按 J，下行下一层",
     learn: "录技成功！按 U/I/O/P（或数字键）施放，详见刀谱（C）",
-    telegraph: "敌已亮刀（红框！）——本回合内按 J 迎击＝弹反：抵消其攻势+2伤（回合制，不抢速度）",
+    telegraph: "敌露出亮刀破绽（红框）！本回合内按 J 迎击＝弹反：抵消其攻势+2伤（破绽可遇不可求）",
     relic: "得刀卡【遗物】——本轮全程有效，详见行囊（B）"
   };
   function pushTut(evs) {
@@ -3500,18 +3505,36 @@ button { font-family: inherit; }
     return 3;
   }
 
-  /* J：朝面朝方向纯攻击/互动——绝不移动（无目标则挥空，不耗回合） */
+  /* J：纯攻击/互动，绝不移动。
+     索敌：优先面朝之敌；面朝落空而身旁有敌，自动转向最近身位出刀（多敌择朝向夹角最小者）；
+     无敌则看面朝方向有无互动目标（箱/灶/梯/商/树）；都没有才挥空（不耗回合）。 */
   function interactForward() {
     if (busy()) return;
     const G = game.G;
+    const Gr = MDG.Grid;
+    /* 一、身旁索敌 */
+    let target = null;
+    const adj = [];
+    for (const [dx, dy] of Gr.DIRS) {
+      const u = MDG.Engine.unitAt(G, G.player.x + dx, G.player.y + dy);
+      if (u && u.side === "e" && !u.dead) adj.push({ dx, dy, u, align: dx * facing[0] + dy * facing[1] });
+    }
+    if (adj.length) {
+      adj.sort((a, b) => (b.align - a.align) || (a.u.hp - b.u.hp));
+      target = adj[0];
+      facing = [target.dx, target.dy];
+      act({ t: "move", dx: target.dx, dy: target.dy });
+      return;
+    }
+    /* 二、面朝方向互动目标 */
     const tx = G.player.x + facing[0], ty = G.player.y + facing[1];
     if (!MDG.Grid.inB(G.map, tx, ty)) { MDG.APP.toast("面前是虚空——挥刀落空"); return; }
-    const Gr = MDG.Grid;
     const tile = Gr.at(G.map, tx, ty);
-    const foe = MDG.Engine.unitAt(G, tx, ty);
-    const interactive = !!foe || [Gr.CHEST, Gr.CAMPFIRE, Gr.SHOP, Gr.STAIRS, Gr.TREE].includes(tile);
-    if (interactive) { act({ t: "move", dx: facing[0], dy: facing[1] }); return; }
-    MDG.APP.toast("前方无目标——挥刀落空（不耗回合；按空格待机，敌人便会行动）");
+    if ([Gr.CHEST, Gr.CAMPFIRE, Gr.SHOP, Gr.STAIRS, Gr.TREE].includes(tile)) {
+      act({ t: "move", dx: facing[0], dy: facing[1] });
+      return;
+    }
+    MDG.APP.toast("身旁无敌——挥刀落空（不耗回合；按空格待机，敌人便会行动）");
   }
 
   /* 点击画布（鼠标功能全保留） */

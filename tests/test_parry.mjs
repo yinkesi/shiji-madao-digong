@@ -4,6 +4,7 @@ import { loadCore, makeT, placeEnemy } from "./harness.mjs";
 const ctx = loadCore();
 const { Engine, Grid, DATA } = ctx.MDG;
 const t = makeT("parry");
+Engine.setTeleChance(1); // 钉亮刀率=1：专项测试不赌概率（概率本身另有专项）
 
 function fresh() {
   const G = Engine.newRunState({ seed: "parry-" + Math.floor(Math.random() * 1e9), runnerId: "yinkesi", diffV: "normal", meta: {} });
@@ -110,6 +111,23 @@ function fresh() {
   t.eq(G.player.hp, hp0 - 3, "戒备轮两敌齐出（-1-1-1）");
 }
 
+/* 8.5 戒备逐次加长：二次弹反戒备2回合 */
+{
+  const G = fresh();
+  const foe = placeEnemy(ctx, G, "mob", G.player.x + 1, G.player.y, { aggro: true });
+  foe.hp = 99; foe.maxHp = 99;
+  Engine.act(G, { t: "move", dx: 1, dy: 0 }); // 一弹：cd=2
+  Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" }); // 戒备1回合+冷却毕
+  t.eq(foe.telegraph, true, "冷却毕再亮刀");
+  Engine.act(G, { t: "move", dx: 1, dy: 0 }); // 二弹
+  t.eq(foe.parryCd, 3, "二次弹反戒备3（含当轮）");
+  Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" });
+  Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" }); // 3回合戒备+冷却
+  t.eq(foe.telegraph, true, "长戒备后终再亮刀");
+  Engine.act(G, { t: "move", dx: 1, dy: 0 }); // 三弹
+  t.eq(foe.parryCd, 4, "三次起戒备封顶4");
+}
+
 /* 9. 血祭+弹反：翻倍连弹反加伤一起翻 */
 {
   const G = fresh();
@@ -123,6 +141,21 @@ function fresh() {
   t.ok(99 - foe.hp >= 8, "翻倍弹反≥8伤（(2+2)×2）");
   t.eq(p.st.emp, 1, "翻倍余一层");
   void hpMid;
+}
+
+/* 10. 亮刀率=0：永不亮刀（概率旋钮生效） */
+{
+  Engine.setTeleChance(0);
+  const G = fresh();
+  const foe = placeEnemy(ctx, G, "mob", G.player.x + 1, G.player.y, { aggro: true });
+  foe.hp = 99; foe.maxHp = 99;
+  for (let i = 0; i < 12; i++) Engine.act(G, { t: "wait" });
+  t.eq(foe.telegraph, false, "亮刀率0则永不亮刀");
+  const hp0 = G.player.hp;
+  const evs = Engine.act(G, { t: "move", dx: 1, dy: 0 });
+  t.ok(!evs.some(e => e.t === "parry"), "无破绽则无弹反");
+  t.eq(foe.hp, 97, "普通刀击伤2");
+  Engine.setTeleChance(1); // 复原
 }
 
 process.exit(t.done());

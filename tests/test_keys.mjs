@@ -83,12 +83,12 @@ console.log("8 H 帮助:", helpTxt.includes("目标") ? "OK" : "FAIL「" + helpT
 // 8.5) J 纯攻击：面前无目标不移动；有敌才出手
 {
   // 朝左走一步（facing=左），面前即刚离开的空地 → J 必须不移动
-  const p0 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
+  const p0 = await page.evaluate(() => { MDG.Main.game.G.enemies = []; return { x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }; });
   await page.keyboard.press("a"); await page.waitForTimeout(200);
   const p1 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
   await page.keyboard.press("j"); await page.waitForTimeout(200);
-  const p2 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
-  console.log("8a J 空挥不动:", (p2.x === p1.x && p2.y === p1.y) ? "OK" : "FAIL " + JSON.stringify([p1, p2]));
+  const p2 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y, facing: MDG.Input.facing() }));
+  console.log("8a J 空挥不动:", (p2.x === p1.x && p2.y === p1.y && p2.facing[0] === -1) ? "OK" : "FAIL " + JSON.stringify([p1, p2]));
   // 面前放个敌，按 J 应攻击且玩家不动
   const r = await page.evaluate(() => {
     const G = MDG.Main.game.G;
@@ -121,6 +121,62 @@ console.log("8 H 帮助:", helpTxt.includes("目标") ? "OK" : "FAIL「" + helpT
     return { total: texts.length, sameN: same.length };
   });
   console.log("8c toast 去重:", dup.sameN <= 1 && dup.total <= 3 ? "OK（同文 " + dup.sameN + " 条，总 " + dup.total + " 条）" : "FAIL " + JSON.stringify(dup));
+}
+
+// 8d) J 自动转向：面朝右、左侧有敌 → J 打左侧
+{
+  const r = await page.evaluate(() => {
+    const G = MDG.Main.game.G;
+    G.enemies = [];
+    // 找一块左右都是可走地的位置
+    const Gr = MDG.Grid;
+    let spot = null;
+    for (let y = 1; y < G.map.h - 1 && !spot; y++) for (let x = 1; x < G.map.w - 1 && !spot; x++) {
+      if (Gr.at(G.map, x, y) !== Gr.FLOOR || Gr.at(G.map, x - 1, y) !== Gr.FLOOR || Gr.at(G.map, x + 1, y) !== Gr.FLOOR) continue;
+      spot = [x, y];
+    }
+    if (!spot) return { found: false };
+    G.player.x = spot[0]; G.player.y = spot[1];
+    const foe = { uid: "kb", chId: "mob", name: "左敌", glyph: "左", color: "#333", side: "e",
+      x: spot[0] - 1, y: spot[1], hp: 30, maxHp: 30, dmg: 0, saw: 0, moveRange: 1, passive: null, skills: [],
+      st: { stun: 0, disarm: 0, poison: 0, shield: 0, emp: 0, grudge: 0, buffKnife: 0 },
+      boss: false, elite: false, mob: true, aggro: false, dead: false, lethalUsed: false, firstHitTaken: false,
+      telegraph: false, _parried: false, parryCd: 0 };
+    G.enemies.push(foe);
+    MDG.Input.__faceRight = null;
+    return { found: true, hp0: foe.hp, facing: MDG.Input.facing() };
+  });
+  // 面朝右：先按 d 朝右走一格（走到空地，facing=右），再回来？——简化：直接清 enemies 后把玩家放好，facing 无法直接设——用一次向右移动设朝向
+  // 上一步 evaluate 已把玩家放在左右皆空地：按 d（向右走，facing=右），敌在左侧新位置补放
+  const r2 = await page.evaluate(() => {
+    const G = MDG.Main.game.G;
+    const foe = { uid: "kb2", chId: "mob", name: "左敌", glyph: "左", color: "#333", side: "e",
+      x: G.player.x - 1, y: G.player.y, hp: 30, maxHp: 30, dmg: 0, saw: 0, moveRange: 1, passive: null, skills: [],
+      st: { stun: 0, disarm: 0, poison: 0, shield: 0, emp: 0, grudge: 0, buffKnife: 0 },
+      boss: false, elite: false, mob: true, aggro: false, dead: false, lethalUsed: false, firstHitTaken: false,
+      telegraph: false, _parried: false, parryCd: 0 };
+    G.enemies.push(foe);
+    return { hp0: foe.hp };
+  });
+  await page.keyboard.press("d"); await page.waitForTimeout(220); // 面朝右走一步
+  await page.evaluate(() => {
+    const G = MDG.Main.game.G;
+    const foe = { uid: "kb3", chId: "mob", name: "左敌", glyph: "左", color: "#333", side: "e",
+      x: G.player.x - 1, y: G.player.y, hp: 30, maxHp: 30, dmg: 0, saw: 0, moveRange: 1, passive: null, skills: [],
+      st: { stun: 0, disarm: 0, poison: 0, shield: 0, emp: 0, grudge: 0, buffKnife: 0 },
+      boss: false, elite: false, mob: true, aggro: false, dead: false, lethalUsed: false, firstHitTaken: false,
+      telegraph: false, _parried: false, parryCd: 0 };
+    G.enemies.push(foe);
+  });
+  const before = await page.evaluate(() => ({ facing: MDG.Input.facing() }));
+  await page.keyboard.press("j"); await page.waitForTimeout(250);
+  const r3 = await page.evaluate(() => {
+    const G = MDG.Main.game.G;
+    const foe = G.enemies.find(u => u.uid === "kb3");
+    const foe2 = G.enemies.find(u => u.uid === "kb2");
+    return { dmg3: foe ? 30 - foe.hp : -1, dmg2: foe2 ? 30 - foe2.hp : -1, facing: MDG.Input.facing() };
+  });
+  console.log("8d J 自动转向:", (before.facing[0] === 1 && r3.dmg3 >= 2 && r3.facing[0] === -1) ? "OK（面朝右，转身打了左侧敌 " + r3.dmg3 + " 伤）" : "FAIL " + JSON.stringify([before, r3]));
 }
 
 // 9) 全程无页面错误

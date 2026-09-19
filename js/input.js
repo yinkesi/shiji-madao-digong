@@ -152,18 +152,36 @@
     return 3;
   }
 
-  /* J：朝面朝方向纯攻击/互动——绝不移动（无目标则挥空，不耗回合） */
+  /* J：纯攻击/互动，绝不移动。
+     索敌：优先面朝之敌；面朝落空而身旁有敌，自动转向最近身位出刀（多敌择朝向夹角最小者）；
+     无敌则看面朝方向有无互动目标（箱/灶/梯/商/树）；都没有才挥空（不耗回合）。 */
   function interactForward() {
     if (busy()) return;
     const G = game.G;
+    const Gr = MDG.Grid;
+    /* 一、身旁索敌 */
+    let target = null;
+    const adj = [];
+    for (const [dx, dy] of Gr.DIRS) {
+      const u = MDG.Engine.unitAt(G, G.player.x + dx, G.player.y + dy);
+      if (u && u.side === "e" && !u.dead) adj.push({ dx, dy, u, align: dx * facing[0] + dy * facing[1] });
+    }
+    if (adj.length) {
+      adj.sort((a, b) => (b.align - a.align) || (a.u.hp - b.u.hp));
+      target = adj[0];
+      facing = [target.dx, target.dy];
+      act({ t: "move", dx: target.dx, dy: target.dy });
+      return;
+    }
+    /* 二、面朝方向互动目标 */
     const tx = G.player.x + facing[0], ty = G.player.y + facing[1];
     if (!MDG.Grid.inB(G.map, tx, ty)) { MDG.APP.toast("面前是虚空——挥刀落空"); return; }
-    const Gr = MDG.Grid;
     const tile = Gr.at(G.map, tx, ty);
-    const foe = MDG.Engine.unitAt(G, tx, ty);
-    const interactive = !!foe || [Gr.CHEST, Gr.CAMPFIRE, Gr.SHOP, Gr.STAIRS, Gr.TREE].includes(tile);
-    if (interactive) { act({ t: "move", dx: facing[0], dy: facing[1] }); return; }
-    MDG.APP.toast("前方无目标——挥刀落空（不耗回合；按空格待机，敌人便会行动）");
+    if ([Gr.CHEST, Gr.CAMPFIRE, Gr.SHOP, Gr.STAIRS, Gr.TREE].includes(tile)) {
+      act({ t: "move", dx: facing[0], dy: facing[1] });
+      return;
+    }
+    MDG.APP.toast("身旁无敌——挥刀落空（不耗回合；按空格待机，敌人便会行动）");
   }
 
   /* 点击画布（鼠标功能全保留） */

@@ -175,7 +175,8 @@
     if (att.side === "p" && def.side === "e" && def.telegraph && !def.dead) {
       dmg += 2;
       def._parried = true;
-      def.parryCd = 2;
+      def.parries = (def.parries || 0) + 1;
+      def.parryCd = Math.min(4, 1 + def.parries); /* 戒备逐次加长：1→2→3 回合 */
       def.telegraph = false;
       ev(G, { t: "parry", x: def.x, y: def.y, name: def.name });
       log(G, "弹反！" + def.name + "的攻势被荡开——其本回合失措。");
@@ -357,6 +358,8 @@
   }
 
   /* ---------------- 回合开始（特则） ---------------- */
+  /* 亮刀破绽的出现率：可遇不可求，弹反才有价值（测试可钉为 0/1） */
+  let teleChance = 0.45;
   function roundStart(G) {
     G._firstKnifeUsed = false;
     G.enemies.forEach(u => { u.firstHitTaken = false; });
@@ -366,7 +369,7 @@
       if (u.parryCd > 0) u.parryCd--;
       const was = u.telegraph;
       u.telegraph = !u.dead && u.aggro && u.st.stun === 0 && !(u.parryCd > 0) && !p.dead &&
-        G3().manh(u.x, u.y, p.x, p.y) === 1;
+        G3().manh(u.x, u.y, p.x, p.y) === 1 && G.r.chance(teleChance);
       if (u.telegraph && !was) {
         ev(G, { t: "telegraph", x: u.x, y: u.y, name: u.name });
         const T = G.tut || (G.tut = {});
@@ -882,6 +885,8 @@
     newRunState, enterFloor, act, serialize, deserialize, saveString,
     unitAt, livingEnemies, stairsOpenNow, computeStairs, gateIds, strike, heal, addItem, log, ev,
     /* 供表现层查询 */
-    tileAt: (G, x, y) => G3().at(G.map, x, y)
+    tileAt: (G, x, y) => G3().at(G.map, x, y),
+    setTeleChance: (v) => { teleChance = v; },
+    getTeleChance: () => teleChance
   };
 })(typeof window !== "undefined" ? window : globalThis);
