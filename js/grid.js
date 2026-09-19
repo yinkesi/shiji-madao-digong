@@ -2,13 +2,13 @@
  * 实验史记 · 马刀地宫 —— 格网卷
  * 瓦片地图、视线（Bresenham）、广度寻路、视野（FOV）。
  * 瓦片码：0 墙 / 1 宫室地面 / 2 走廊 / 3 下行梯 / 4 木箱 / 5 史料 /
- *         6 灶间 / 7 树（可击碎的堵路物）/ 8 商摊
+ *         6 灶间 / 7 树（可击碎的堵路物）/ 8 商摊 / 9 陷阱（可见尖刺，踩中即发）
  * 核心层文件：不碰 DOM，Node 可直测。挂载：MDG.Grid
  * ============================================================ */
 (function (ROOT) {
   "use strict";
 
-  const WALL = 0, FLOOR = 1, CORR = 2, STAIRS = 3, CHEST = 4, SCROLL = 5, CAMPFIRE = 6, TREE = 7, SHOP = 8;
+  const WALL = 0, FLOOR = 1, CORR = 2, STAIRS = 3, CHEST = 4, SCROLL = 5, CAMPFIRE = 6, TREE = 7, SHOP = 8, TRAP = 9;
 
   function makeMap(w, h) {
     const tiles = new Array(w * h).fill(WALL);
@@ -124,5 +124,5 @@
   }
 
   ROOT.MDG = ROOT.MDG || {};
-  ROOT.MDG.Grid = { WALL, FLOOR, CORR, STAIRS, CHEST, SCROLL, CAMPFIRE, TREE, SHOP, makeMap, idx, inB, at, set, walkable, opaque, los, fov, stepToward, distField, DIRS, manh, pushDest };
+  ROOT.MDG.Grid = { WALL, FLOOR, CORR, STAIRS, CHEST, SCROLL, CAMPFIRE, TREE, SHOP, TRAP, makeMap, idx, inB, at, set, walkable, opaque, los, fov, stepToward, distField, DIRS, manh, pushDest };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -138,6 +138,12 @@
           break;
         case "stagger": addFloat(e.x, e.y, "失措", "#9aa7c4"); break;
         case "telegraph": S.tele(); break;
+        case "trap":
+          addFloat(e.x, e.y, "陷阱！-3", "#e0705f");
+          addFlash(e.x, e.y); kick();
+          terrainDirty = true; /* 尖刺报废，瓦片复原为地 */
+          S.trap();
+          break;
         case "descend": S.stairs(); showFloorCard(G); cam.init = false; break;
         case "win": S.win(); break;
         case "dead": S.dead(); break;
@@ -208,6 +214,18 @@
     if (Gr.at(G.map, x + 1, y) === Gr.WALL) t.fillRect(px + TILE - 2, py, 2, TILE);
     if (Gr.at(G.map, x, y - 1) === Gr.WALL) t.fillRect(px, py, TILE, 2);
     if (Gr.at(G.map, x, y + 1) === Gr.WALL) t.fillRect(px, py + TILE - 2, TILE, 2);
+    if (tile === Gr.TRAP) {
+      /* 陷阱：醒目的尖刺（朱红，一眼即知是危险物） */
+      t.fillStyle = "rgba(193,75,58,.18)";
+      t.fillRect(px + 3, py + 3, TILE - 6, TILE - 6);
+      t.fillStyle = "#8a3b3b";
+      t.beginPath(); t.moveTo(px + 4, py + TILE - 6); t.lineTo(px + 9, py + TILE - 20); t.lineTo(px + 14, py + TILE - 6); t.closePath(); t.fill();
+      t.beginPath(); t.moveTo(px + 13, py + TILE - 6); t.lineTo(px + 18, py + TILE - 24); t.lineTo(px + 23, py + TILE - 6); t.closePath(); t.fill();
+      t.beginPath(); t.moveTo(px + 22, py + TILE - 6); t.lineTo(px + 27, py + TILE - 18); t.lineTo(px + 32, py + TILE - 6); t.closePath(); t.fill();
+      t.fillStyle = "#e0705f";
+      t.fillRect(px + 4, py + TILE - 7, TILE - 8, 3);
+      return;
+    }
     if (tile === Gr.TREE) {
       /* 树：明确的堵路物（此前没有画出来，是字面意义的空气墙） */
       t.fillStyle = "rgba(0,0,0,.35)";
@@ -313,6 +331,7 @@
       if (v === Gr.CAMPFIRE) { t.fillStyle = "#d08a4f"; t.fillRect(x * s, y * s, s, s); }
       if (v === Gr.SHOP) { t.fillStyle = "#7dc99a"; t.fillRect(x * s, y * s, s, s); }
       if (v === Gr.TREE) { t.fillStyle = "#3c6a40"; t.fillRect(x * s, y * s, s, s); }
+      if (v === Gr.TRAP) { t.fillStyle = "#c14b3a"; t.fillRect(x * s, y * s, s, s); }
     }
     miniDirty = false;
   }

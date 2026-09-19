@@ -405,13 +405,13 @@ button { font-family: inherit; }
  * 实验史记 · 马刀地宫 —— 格网卷
  * 瓦片地图、视线（Bresenham）、广度寻路、视野（FOV）。
  * 瓦片码：0 墙 / 1 宫室地面 / 2 走廊 / 3 下行梯 / 4 木箱 / 5 史料 /
- *         6 灶间 / 7 树（可击碎的堵路物）/ 8 商摊
+ *         6 灶间 / 7 树（可击碎的堵路物）/ 8 商摊 / 9 陷阱（可见尖刺，踩中即发）
  * 核心层文件：不碰 DOM，Node 可直测。挂载：MDG.Grid
  * ============================================================ */
 (function (ROOT) {
   "use strict";
 
-  const WALL = 0, FLOOR = 1, CORR = 2, STAIRS = 3, CHEST = 4, SCROLL = 5, CAMPFIRE = 6, TREE = 7, SHOP = 8;
+  const WALL = 0, FLOOR = 1, CORR = 2, STAIRS = 3, CHEST = 4, SCROLL = 5, CAMPFIRE = 6, TREE = 7, SHOP = 8, TRAP = 9;
 
   function makeMap(w, h) {
     const tiles = new Array(w * h).fill(WALL);
@@ -527,7 +527,7 @@ button { font-family: inherit; }
   }
 
   ROOT.MDG = ROOT.MDG || {};
-  ROOT.MDG.Grid = { WALL, FLOOR, CORR, STAIRS, CHEST, SCROLL, CAMPFIRE, TREE, SHOP, makeMap, idx, inB, at, set, walkable, opaque, los, fov, stepToward, distField, DIRS, manh, pushDest };
+  ROOT.MDG.Grid = { WALL, FLOOR, CORR, STAIRS, CHEST, SCROLL, CAMPFIRE, TREE, SHOP, TRAP, makeMap, idx, inB, at, set, walkable, opaque, los, fov, stepToward, distField, DIRS, manh, pushDest };
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>
@@ -772,7 +772,6 @@ button { font-family: inherit; }
 
   /* ---------------- 修炼树（文脉） ---------------- */
   const META_TREE = [
-    { id: "fist", name: "拳不离手", max: 3, cost: [8, 16, 28], desc: "刀击+1/级。（冬练三九）" },
     { id: "body", name: "体魄", max: 3, cost: [8, 16, 28], desc: "生命上限+4/级。（跑操不落）" },
     { id: "purse", name: "盘缠", max: 2, cost: [6, 12], desc: "开局零花钱+10/级。（压岁钱藏着）" },
     { id: "appetite", name: "饭量", max: 2, cost: [6, 12], desc: "食物回复+2/级。（食堂阿姨手不抖）" },
@@ -949,6 +948,16 @@ button { font-family: inherit; }
     for (let i = 0; i < places.scrolls.length; i++) {
       const s = places.scrolls[i]; G.set(map, s[0], s[1], G.SCROLL);
     }
+    /* 陷阱：可见的尖刺，踩中即发（一次性）；离出生点至少4格 */
+    const trapN = Math.min(7, 1 + Math.ceil(def.n / 2));
+    for (let i = 0; i < trapN; i++) {
+      for (let t = 0; t < 40; t++) {
+        const x = R.int(1, map.w - 2), y = R.int(1, map.h - 2);
+        if (G.at(map, x, y) === G.FLOOR && free(x, y)) {
+          G.set(map, x, y, G.TRAP); taken.add(y * map.w + x); break;
+        }
+      }
+    }
     /* 崇国庭：先种两株树 */
     if (def.rule === "zhongshu") {
       for (let i = 0; i < 2; i++) {
@@ -1051,7 +1060,7 @@ button { font-family: inherit; }
     const p = makeUnit(runner.id, 0, 0, { side: "p" });
     p.maxHp = runner.hp + (meta.body || 0) * 4;
     p.hp = p.maxHp;
-    p.dmg = (runner.dmg || 2) + (meta.fist || 0);
+    p.dmg = runner.dmg || 2;
     addSkill(p, runner.skill);                 // 血祭（或该将本技）打底
     if (runner.id === "yinkesi" && (meta.blood || 0) > 0) p.skills[0].blood += meta.blood;
     if (meta.guard) p.st.shield += meta.guard;
@@ -1310,6 +1319,7 @@ button { font-family: inherit; }
       log(G, "皇太子之命硬——留了1血。");
       return;
     }
+    p.dead = true;
     G.over = true; G.won = false;
     ev(G, { t: "dead" });
     log(G, "笔滞于此，且搁笔——此轮所想，皆成文脉。");
@@ -1413,6 +1423,7 @@ button { font-family: inherit; }
             if (Gr.walkable(G.map, nx, ny) && !occupied(G, nx, ny) && !isSpecialTile(G, nx, ny)) {
               ev(G, { t: "emove", uid: u.uid, x0: u.x, y0: u.y, x1: nx, y1: ny });
               u.x = nx; u.y = ny;
+              if (Gr.at(G.map, nx, ny) === Gr.TRAP) triggerTrap(G, nx, ny, u);
             }
           }
         }
@@ -1451,8 +1462,10 @@ button { font-family: inherit; }
         if (!nxt) break;
         ev(G, { t: "emove", uid: u.uid, x0: u.x, y0: u.y, x1: nxt[0], y1: nxt[1] });
         u.x = nxt[0]; u.y = nxt[1];
+        if (Gr.at(G.map, u.x, u.y) === Gr.TRAP) triggerTrap(G, u.x, u.y, u);
+        if (u.dead || G.over) break;
       }
-      if (adj(u, p)) strike(G, u, p, "knife", { dmg: u.dmg });
+      if (adj(u, p) && !u.dead) strike(G, u, p, "knife", { dmg: u.dmg });
     }
   }
   function isSpecialTile(G, x, y) {
@@ -1599,6 +1612,20 @@ button { font-family: inherit; }
     return evs.slice();
   }
 
+  /* ---- 陷阱：尖刺一次性，无视护盾，敌我皆可触发 ---- */
+  function triggerTrap(G, x, y, u) {
+    G3().set(G.map, x, y, G3().FLOOR); /* 尖刺弹出后报废 */
+    ev(G, { t: "trap", x, y, name: u.name, side: u.side });
+    u.hp -= 3;
+    if (u.side === "p") {
+      log(G, "踩中陷阱！尖刺贯入，无视护盾损3血。");
+      if (u.hp <= 0) playerDown(G);
+    } else {
+      log(G, u.name + "踩中陷阱，尖刺贯入损3血。");
+      if (u.hp <= 0) kill(G, null, u);
+    }
+  }
+
   /* ---- 引导：首次见闻推送（表现层转 toast）---- */
   function tutorialEvents(G, action) {
     const T = G.tut || (G.tut = {});
@@ -1619,6 +1646,7 @@ button { font-family: inherit; }
         else if (tile === Gr.CHEST) kind = "chest";
         else if (tile === Gr.SCROLL) kind = "scroll";
         else if (tile === Gr.SHOP) kind = "shop";
+        else if (tile === Gr.TRAP) kind = "trap";
         else if (tile === Gr.STAIRS) kind = G._stairsOpen ? "stairsOpen" : "stairsLocked";
         if (kind && d < foundD) { found = kind; foundD = d; }
       }
@@ -1661,6 +1689,7 @@ button { font-family: inherit; }
       const tt = Gr.at(G.map, tx, ty);
       if (tt === Gr.WALL || tt === Gr.TREE || tt === Gr.CHEST || tt === Gr.CAMPFIRE || tt === Gr.SHOP) break;
       cx = tx; cy = ty;
+      if (tt === Gr.TRAP) { triggerTrap(G, cx, cy, p); break; }
       if (tt === Gr.SCROLL) { pickScroll(G, cx, cy); break; }
       if (tt === Gr.STAIRS) break; // 走上梯格即视为「在梯上」，交互另行
     }
@@ -1915,7 +1944,15 @@ button { font-family: inherit; }
     if (!raw) return fresh();
     try {
       const m = JSON.parse(raw);
-      return Object.assign(fresh(), m, { settings: Object.assign(fresh().settings, m.settings || {}) });
+      const merged = Object.assign(fresh(), m, { settings: Object.assign(fresh().settings, m.settings || {}) });
+      /* 旧档迁移：「拳不离手」已废除——按已购等级退还文脉（一次性） */
+      if (merged.tree && merged.tree.fist) {
+        const lv = merged.tree.fist;
+        MDG.Meta.lastRefund = [8, 16, 28].slice(0, lv).reduce((a, b) => a + b, 0);
+        merged.wemai = (merged.wemai || 0) + MDG.Meta.lastRefund;
+        delete merged.tree.fist;
+      }
+      return merged;
     } catch (e) { return fresh(); }
   }
   function save(M) { Store.set(KEY, JSON.stringify(M)); return M; }
@@ -1940,7 +1977,7 @@ button { font-family: inherit; }
   /* 修炼加成拍平成引擎吃的形参 */
   function bonuses(M) {
     return {
-      fist: treeLevel(M, "fist"), body: treeLevel(M, "body"), purse: treeLevel(M, "purse"),
+      body: treeLevel(M, "body"), purse: treeLevel(M, "purse"),
       appetite: treeLevel(M, "appetite"), hearth: treeLevel(M, "hearth"),
       blood: treeLevel(M, "blood"), guard: treeLevel(M, "guard"), royalty: treeLevel(M, "royalty")
     };
@@ -1987,7 +2024,7 @@ button { font-family: inherit; }
     return { earned, newUnlocks, newAchs: newAchs.filter(Boolean) };
   }
 
-  MDG.Meta = { KEY, fresh, load, save, treeLevel, nextCost, buy, bonuses, unlockRunner, finishRun };
+  MDG.Meta = { KEY, fresh, load, save, treeLevel, nextCost, buy, bonuses, unlockRunner, finishRun, lastRefund: 0 };
 })(typeof window !== "undefined" ? window : globalThis);
 
 </script>
@@ -2142,6 +2179,7 @@ button { font-family: inherit; }
     chest() { tone(500, .08, "square", .08); setTimeout(() => tone(750, .1, "square", .08), 70); },
     bottle() { noise(.14, .14); tone(120, .12, "square", .1, -40); },
     parry() { noise(.04, .12); tone(1180, .06, "square", .1); setTimeout(() => tone(1568, .1, "square", .09), 45); },
+    trap() { noise(.07, .15); tone(90, .14, "sawtooth", .12, -30); },
     tele() { tone(196, .09, "sawtooth", .05); },
     dead() { [220, 175, 147, 110].forEach((f, i) => setTimeout(() => tone(f, .3, "sawtooth", .1), i * 220)); },
     win() { [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => tone(f, .25, "triangle", .1), i * 160)); }
@@ -2648,6 +2686,12 @@ button { font-family: inherit; }
           break;
         case "stagger": addFloat(e.x, e.y, "失措", "#9aa7c4"); break;
         case "telegraph": S.tele(); break;
+        case "trap":
+          addFloat(e.x, e.y, "陷阱！-3", "#e0705f");
+          addFlash(e.x, e.y); kick();
+          terrainDirty = true; /* 尖刺报废，瓦片复原为地 */
+          S.trap();
+          break;
         case "descend": S.stairs(); showFloorCard(G); cam.init = false; break;
         case "win": S.win(); break;
         case "dead": S.dead(); break;
@@ -2718,6 +2762,18 @@ button { font-family: inherit; }
     if (Gr.at(G.map, x + 1, y) === Gr.WALL) t.fillRect(px + TILE - 2, py, 2, TILE);
     if (Gr.at(G.map, x, y - 1) === Gr.WALL) t.fillRect(px, py, TILE, 2);
     if (Gr.at(G.map, x, y + 1) === Gr.WALL) t.fillRect(px, py + TILE - 2, TILE, 2);
+    if (tile === Gr.TRAP) {
+      /* 陷阱：醒目的尖刺（朱红，一眼即知是危险物） */
+      t.fillStyle = "rgba(193,75,58,.18)";
+      t.fillRect(px + 3, py + 3, TILE - 6, TILE - 6);
+      t.fillStyle = "#8a3b3b";
+      t.beginPath(); t.moveTo(px + 4, py + TILE - 6); t.lineTo(px + 9, py + TILE - 20); t.lineTo(px + 14, py + TILE - 6); t.closePath(); t.fill();
+      t.beginPath(); t.moveTo(px + 13, py + TILE - 6); t.lineTo(px + 18, py + TILE - 24); t.lineTo(px + 23, py + TILE - 6); t.closePath(); t.fill();
+      t.beginPath(); t.moveTo(px + 22, py + TILE - 6); t.lineTo(px + 27, py + TILE - 18); t.lineTo(px + 32, py + TILE - 6); t.closePath(); t.fill();
+      t.fillStyle = "#e0705f";
+      t.fillRect(px + 4, py + TILE - 7, TILE - 8, 3);
+      return;
+    }
     if (tile === Gr.TREE) {
       /* 树：明确的堵路物（此前没有画出来，是字面意义的空气墙） */
       t.fillStyle = "rgba(0,0,0,.35)";
@@ -2823,6 +2879,7 @@ button { font-family: inherit; }
       if (v === Gr.CAMPFIRE) { t.fillStyle = "#d08a4f"; t.fillRect(x * s, y * s, s, s); }
       if (v === Gr.SHOP) { t.fillStyle = "#7dc99a"; t.fillRect(x * s, y * s, s, s); }
       if (v === Gr.TREE) { t.fillStyle = "#3c6a40"; t.fillRect(x * s, y * s, s, s); }
+      if (v === Gr.TRAP) { t.fillStyle = "#c14b3a"; t.fillRect(x * s, y * s, s, s); }
     }
     miniDirty = false;
   }
@@ -2993,6 +3050,7 @@ button { font-family: inherit; }
     chest: "前方有【木箱】——朝它按 J 开箱：钱、吃食或刀卡",
     scroll: "前方有【史料】——走过即拾，文脉+1",
     shop: "前方有【小卖部】——按 J 进店，零花钱购物（↑↓ 选、Enter 买）",
+    trap: "前方有【陷阱】——尖刺无视护盾，踩上损3血且报废；也可以引敌人踩上去",
     stairsLocked: "前方是【楼梯】——被镇守封着；先寻镇守斩之，梯方开",
     stairsOpen: "【楼梯已开】——站上楼梯按 J，下行下一层",
     learn: "录技成功！按 U/I/O/P（或数字键）施放，详见刀谱（C）",

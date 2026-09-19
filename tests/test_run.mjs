@@ -42,11 +42,11 @@ const t = makeT("run");
 {
   const M = Meta.fresh();
   M.wemai = 20;
-  t.ok(Meta.buy(M, "fist"), "买入拳不离手");
-  t.eq(M.tree.fist, 1, "拳不离手一级");
+  t.ok(Meta.buy(M, "body"), "买入体魄");
+  t.eq(M.tree.body, 1, "体魄一级");
   t.eq(M.wemai, 12, "扣费8");
-  t.ok(Meta.nextCost(M, "fist") === 16, "下一级价16");
-  t.ok(!Meta.buy(M, "fist"), "钱不够拒买");
+  t.ok(Meta.nextCost(M, "body") === 16, "下一级价16");
+  t.ok(!Meta.buy(M, "body"), "钱不够拒买");
 }
 
 /* 难度缩放：同种子下，噩梦杂兵血高于简单 */

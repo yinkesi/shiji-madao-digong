@@ -147,6 +147,16 @@
     for (let i = 0; i < places.scrolls.length; i++) {
       const s = places.scrolls[i]; G.set(map, s[0], s[1], G.SCROLL);
     }
+    /* 陷阱：可见的尖刺，踩中即发（一次性）；离出生点至少4格 */
+    const trapN = Math.min(7, 1 + Math.ceil(def.n / 2));
+    for (let i = 0; i < trapN; i++) {
+      for (let t = 0; t < 40; t++) {
+        const x = R.int(1, map.w - 2), y = R.int(1, map.h - 2);
+        if (G.at(map, x, y) === G.FLOOR && free(x, y)) {
+          G.set(map, x, y, G.TRAP); taken.add(y * map.w + x); break;
+        }
+      }
+    }
     /* 崇国庭：先种两株树 */
     if (def.rule === "zhongshu") {
       for (let i = 0; i < 2; i++) {

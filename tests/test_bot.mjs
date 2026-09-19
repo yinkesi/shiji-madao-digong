@@ -17,7 +17,7 @@ function walkTo(G, tx, ty, extraBlock) {
   const p = G.player;
   const s = Grid.stepToward(G.map, p.x, p.y, tx, ty, (x, y) =>
     (!!Engine.unitAt(G, x, y) && !(x === tx && y === ty)) ||
-    [Grid.CHEST, Grid.SHOP].includes(Grid.at(G.map, x, y)) ||
+    [Grid.CHEST, Grid.SHOP, Grid.TRAP].includes(Grid.at(G.map, x, y)) ||
     (extraBlock ? extraBlock(x, y) : false));
   if (s) { Engine.act(G, { t: "move", dx: s[0] - p.x, dy: s[1] - p.y }); return true; }
   Engine.act(G, { t: "wait" });

@@ -36,7 +36,15 @@
     if (!raw) return fresh();
     try {
       const m = JSON.parse(raw);
-      return Object.assign(fresh(), m, { settings: Object.assign(fresh().settings, m.settings || {}) });
+      const merged = Object.assign(fresh(), m, { settings: Object.assign(fresh().settings, m.settings || {}) });
+      /* 旧档迁移：「拳不离手」已废除——按已购等级退还文脉（一次性） */
+      if (merged.tree && merged.tree.fist) {
+        const lv = merged.tree.fist;
+        MDG.Meta.lastRefund = [8, 16, 28].slice(0, lv).reduce((a, b) => a + b, 0);
+        merged.wemai = (merged.wemai || 0) + MDG.Meta.lastRefund;
+        delete merged.tree.fist;
+      }
+      return merged;
     } catch (e) { return fresh(); }
   }
   function save(M) { Store.set(KEY, JSON.stringify(M)); return M; }
@@ -61,7 +69,7 @@
   /* 修炼加成拍平成引擎吃的形参 */
   function bonuses(M) {
     return {
-      fist: treeLevel(M, "fist"), body: treeLevel(M, "body"), purse: treeLevel(M, "purse"),
+      body: treeLevel(M, "body"), purse: treeLevel(M, "purse"),
       appetite: treeLevel(M, "appetite"), hearth: treeLevel(M, "hearth"),
       blood: treeLevel(M, "blood"), guard: treeLevel(M, "guard"), royalty: treeLevel(M, "royalty")
     };
@@ -108,5 +116,5 @@
     return { earned, newUnlocks, newAchs: newAchs.filter(Boolean) };
   }
 
-  MDG.Meta = { KEY, fresh, load, save, treeLevel, nextCost, buy, bonuses, unlockRunner, finishRun };
+  MDG.Meta = { KEY, fresh, load, save, treeLevel, nextCost, buy, bonuses, unlockRunner, finishRun, lastRefund: 0 };
 })(typeof window !== "undefined" ? window : globalThis);

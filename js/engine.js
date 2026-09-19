@@ -67,7 +67,7 @@
     const p = makeUnit(runner.id, 0, 0, { side: "p" });
     p.maxHp = runner.hp + (meta.body || 0) * 4;
     p.hp = p.maxHp;
-    p.dmg = (runner.dmg || 2) + (meta.fist || 0);
+    p.dmg = runner.dmg || 2;
     addSkill(p, runner.skill);                 // 血祭（或该将本技）打底
     if (runner.id === "yinkesi" && (meta.blood || 0) > 0) p.skills[0].blood += meta.blood;
     if (meta.guard) p.st.shield += meta.guard;
@@ -326,6 +326,7 @@
       log(G, "皇太子之命硬——留了1血。");
       return;
     }
+    p.dead = true;
     G.over = true; G.won = false;
     ev(G, { t: "dead" });
     log(G, "笔滞于此，且搁笔——此轮所想，皆成文脉。");
@@ -429,6 +430,7 @@
             if (Gr.walkable(G.map, nx, ny) && !occupied(G, nx, ny) && !isSpecialTile(G, nx, ny)) {
               ev(G, { t: "emove", uid: u.uid, x0: u.x, y0: u.y, x1: nx, y1: ny });
               u.x = nx; u.y = ny;
+              if (Gr.at(G.map, nx, ny) === Gr.TRAP) triggerTrap(G, nx, ny, u);
             }
           }
         }
@@ -467,8 +469,10 @@
         if (!nxt) break;
         ev(G, { t: "emove", uid: u.uid, x0: u.x, y0: u.y, x1: nxt[0], y1: nxt[1] });
         u.x = nxt[0]; u.y = nxt[1];
+        if (Gr.at(G.map, u.x, u.y) === Gr.TRAP) triggerTrap(G, u.x, u.y, u);
+        if (u.dead || G.over) break;
       }
-      if (adj(u, p)) strike(G, u, p, "knife", { dmg: u.dmg });
+      if (adj(u, p) && !u.dead) strike(G, u, p, "knife", { dmg: u.dmg });
     }
   }
   function isSpecialTile(G, x, y) {
@@ -615,6 +619,20 @@
     return evs.slice();
   }
 
+  /* ---- 陷阱：尖刺一次性，无视护盾，敌我皆可触发 ---- */
+  function triggerTrap(G, x, y, u) {
+    G3().set(G.map, x, y, G3().FLOOR); /* 尖刺弹出后报废 */
+    ev(G, { t: "trap", x, y, name: u.name, side: u.side });
+    u.hp -= 3;
+    if (u.side === "p") {
+      log(G, "踩中陷阱！尖刺贯入，无视护盾损3血。");
+      if (u.hp <= 0) playerDown(G);
+    } else {
+      log(G, u.name + "踩中陷阱，尖刺贯入损3血。");
+      if (u.hp <= 0) kill(G, null, u);
+    }
+  }
+
   /* ---- 引导：首次见闻推送（表现层转 toast）---- */
   function tutorialEvents(G, action) {
     const T = G.tut || (G.tut = {});
@@ -635,6 +653,7 @@
         else if (tile === Gr.CHEST) kind = "chest";
         else if (tile === Gr.SCROLL) kind = "scroll";
         else if (tile === Gr.SHOP) kind = "shop";
+        else if (tile === Gr.TRAP) kind = "trap";
         else if (tile === Gr.STAIRS) kind = G._stairsOpen ? "stairsOpen" : "stairsLocked";
         if (kind && d < foundD) { found = kind; foundD = d; }
       }
@@ -677,6 +696,7 @@
       const tt = Gr.at(G.map, tx, ty);
       if (tt === Gr.WALL || tt === Gr.TREE || tt === Gr.CHEST || tt === Gr.CAMPFIRE || tt === Gr.SHOP) break;
       cx = tx; cy = ty;
+      if (tt === Gr.TRAP) { triggerTrap(G, cx, cy, p); break; }
       if (tt === Gr.SCROLL) { pickScroll(G, cx, cy); break; }
       if (tt === Gr.STAIRS) break; // 走上梯格即视为「在梯上」，交互另行
     }
