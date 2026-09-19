@@ -502,9 +502,9 @@
     }
   }
   function isSpecialTile(G, x, y) {
-    /* 敌人绕行：箱与商摊是实体障碍；灶间可通行（敌人不会用灶，但绝不能被它卡死成软锁） */
+    /* 敌人绕行：箱/商摊/灶间/楼梯皆不落脚——灶间曾把走廊堵成软锁，楼梯曾被敌占住堵死下行 */
     const Gr = G3(); const t = Gr.at(G.map, x, y);
-    return t === Gr.CHEST || t === Gr.SHOP;
+    return t === Gr.CHEST || t === Gr.SHOP || t === Gr.CAMPFIRE || t === Gr.STAIRS;
   }
   function bossTaunt(G, chId) {
     const pool = {

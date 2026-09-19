@@ -762,7 +762,7 @@ button { font-family: inherit; }
 
   /* ---------------- 刀卡（遗物，本轮有效） ---------------- */
   const RELICS = {
-    firststrike: { id: "firststrike", name: "先手刀", desc: "每回合首次刀击+1。（早读查得严，唯快不破）" },
+    firststrike: { id: "firststrike", name: "先手刀", desc: "刀击永远+1——本作一刀一回合，刀刀皆先手。（早读查得严，唯快不破）" },
     shield3: { id: "shield3", name: "班主任的偏爱", desc: "每层开局获得3点护盾。（含笑素善大哥）" },
     bloodfree: { id: "bloodfree", name: "以道代血", desc: "血祭不再损血，只耗一息。（道之所在，血不轻洒）" },
     killheal: { id: "killheal", name: "庆功之宴", desc: "击破回复由3升为5。（大胜而归，理当加餐）" },
@@ -1500,9 +1500,9 @@ button { font-family: inherit; }
     }
   }
   function isSpecialTile(G, x, y) {
-    /* 敌人绕行：箱与商摊是实体障碍；灶间可通行（敌人不会用灶，但绝不能被它卡死成软锁） */
+    /* 敌人绕行：箱/商摊/灶间/楼梯皆不落脚——灶间曾把走廊堵成软锁，楼梯曾被敌占住堵死下行 */
     const Gr = G3(); const t = Gr.at(G.map, x, y);
-    return t === Gr.CHEST || t === Gr.SHOP;
+    return t === Gr.CHEST || t === Gr.SHOP || t === Gr.CAMPFIRE || t === Gr.STAIRS;
   }
   function bossTaunt(G, chId) {
     const pool = {
@@ -3427,7 +3427,7 @@ button { font-family: inherit; }
       body.appendChild(el("div", "", "<div style='height:10px'></div>"));
       const reset = el("button", "pbtn", "焚稿重开（清空局外进度）");
       reset.style.borderColor = "var(--cinnabar)"; reset.style.color = "var(--cinnabar)";
-      reset.onclick = () => { if (confirm("焚稿重开：文脉、修炼、名册、图鉴皆清，且不可复元。确定？")) { MDG.Meta.save(MDG.Meta.fresh()); location.reload(); } };
+      reset.onclick = () => { if (confirm("焚稿重开：文脉、修炼、名册、图鉴皆清，且不可复元。确定？")) { MDG.Meta.save(MDG.Meta.fresh()); MDG.Store.del("shiji_digong_run_v1"); location.reload(); } };
       body.appendChild(reset);
       body.appendChild(el("div", "muted", "存档于 localStorage：shiji_digong_v1 / shiji_digong_run_v1"));
     });

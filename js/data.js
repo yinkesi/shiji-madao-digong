@@ -227,7 +227,7 @@
 
   /* ---------------- 刀卡（遗物，本轮有效） ---------------- */
   const RELICS = {
-    firststrike: { id: "firststrike", name: "先手刀", desc: "每回合首次刀击+1。（早读查得严，唯快不破）" },
+    firststrike: { id: "firststrike", name: "先手刀", desc: "刀击永远+1——本作一刀一回合，刀刀皆先手。（早读查得严，唯快不破）" },
     shield3: { id: "shield3", name: "班主任的偏爱", desc: "每层开局获得3点护盾。（含笑素善大哥）" },
     bloodfree: { id: "bloodfree", name: "以道代血", desc: "血祭不再损血，只耗一息。（道之所在，血不轻洒）" },
     killheal: { id: "killheal", name: "庆功之宴", desc: "击破回复由3升为5。（大胜而归，理当加餐）" },

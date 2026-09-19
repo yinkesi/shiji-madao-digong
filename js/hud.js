@@ -304,7 +304,7 @@
       body.appendChild(el("div", "", "<div style='height:10px'></div>"));
       const reset = el("button", "pbtn", "焚稿重开（清空局外进度）");
       reset.style.borderColor = "var(--cinnabar)"; reset.style.color = "var(--cinnabar)";
-      reset.onclick = () => { if (confirm("焚稿重开：文脉、修炼、名册、图鉴皆清，且不可复元。确定？")) { MDG.Meta.save(MDG.Meta.fresh()); location.reload(); } };
+      reset.onclick = () => { if (confirm("焚稿重开：文脉、修炼、名册、图鉴皆清，且不可复元。确定？")) { MDG.Meta.save(MDG.Meta.fresh()); MDG.Store.del("shiji_digong_run_v1"); location.reload(); } };
       body.appendChild(reset);
       body.appendChild(el("div", "muted", "存档于 localStorage：shiji_digong_v1 / shiji_digong_run_v1"));
     });
