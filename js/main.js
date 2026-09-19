@@ -14,16 +14,14 @@
   /* ---------------- 序章 / 尾声（记忆体的世界观） ----------------
      承前作结句「写进书里的刀，不会消」——本作的地宫不是校园塌了，
      是音克思为收最后一卷、梦入卷底：九层即九层记忆。 */
-  const PROLOGUE = [
-    "毕业那天，wonder 躺在校门口说：写完这一场，你就毕业了。\n我答：写进书里的刀，不会消。\n——话，是说满了。",
-    "回来收拾旧物的夜里，我摊开九卷旧稿，却写不出第十卷。\n写了三年的『事』：谁与谁战，胜负如何。\n可我记不清了——万震抬头时先看题还是先看人？\n仙女那一声『滚』，尾音有没有停顿？\n隔着的纸，终究不是人。",
-    "那夜我在旧教室睡着。梦里校园一层层往下沉：\n操场在最上，校门在最底；\n人人还在原地，做着各自记得的事——\n万震等题，wonder 验算，头哥的陀螺没有停。\n梦里的人不会老，也不会让路。要往下走，只得一刀一刀，重新赢过。",
-    "醒来天未亮，我忽然懂了最后一卷的写法：\n不写事，写人；不写刀，写刀后面的人。\n梦里每想对一处，笔下便多一行；想错的、想不动的，也不白想——都算文脉。\n于是提刀入梦。既毕业，无复有刀者——\n然记忆九层，刀声未绝。"
-  ];
-  const EPILOGUE = [
-    "梦醒。粉笔题被晨光擦得干干净净。\n旧稿摊在桌上，最后一卷恰好落笔：\n『wonder 者，最早讲规则之人也。\n刀后面的人，这一回，写清楚了。』",
-    "既毕业，无复有刀者——悲哉。\n然想清楚再写下来的刀，这次是真的不会消了。\n（刀已收，卷已合。九层记忆，来日可重走——重开重开。）"
-  ];
+  /* 序章/尾声：四格漫画（Comic.PRO/EPI，见 comic.js）。
+     PROLOGUE/EPILOGUE 各为「一页」= 一组完整四格；翻页即合上。 */
+  const PROLOGUE = [{ panels: null }];
+  const EPILOGUE = [{ panels: null }];
+  function initComics() {
+    PROLOGUE[0].panels = MDG.Comic.PRO;
+    EPILOGUE[0].panels = MDG.Comic.EPI;
+  }
   let proPages = null, proIdx = 0, proCb = null;
   function showPages(pages, cb) {
     proPages = pages; proIdx = 0; proCb = cb || null;
@@ -31,9 +29,10 @@
     show("prologue-screen");
   }
   function renderPage() {
-    $("pro-pages").innerHTML = proPages[proIdx].split("\n").map(l => "<p>" + l + "</p>").join("");
+    const page = proPages[proIdx];
     $("pro-ind").textContent = (proIdx + 1) + " / " + proPages.length;
     $("pro-next").textContent = proIdx === proPages.length - 1 ? "合上" : "翻页";
+    MDG.Comic.mount($("pro-pages"), page.panels);
   }
   function proEnd(cb) {
     proPages = null; proCb = null;
@@ -187,6 +186,7 @@
 
   /* ---------------- 装配 ---------------- */
   function boot() {
+    initComics();
     MDG.Input.init();
     const M = MDG.Meta.load();
     MDG.APP.setMuted(M.settings.muted);

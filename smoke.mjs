@@ -30,7 +30,8 @@ await page.click("#btn-new");
 /* 首次入宫先见序章——空格翻页或直接跳过 */
 try {
   await page.waitForSelector("#prologue-screen:not(.hidden)", { timeout: 1500 });
-  ok((await page.textContent("#pro-pages")).includes("写进书里的刀"), "序章承接前作结句");
+  await page.waitForFunction(() => (document.querySelector(".comic-line") || { textContent: "" }).textContent.length > 0, { timeout: 3000 });
+  ok((await page.textContent(".comic-line")).includes("毕业那天"), "序章漫画就位（四格画布+台词）");
   await page.screenshot({ path: path.join(HERE, "testshots", "02b-prologue.png") });
   await page.click("#pro-skip");
 } catch (e) { /* 二周目无序章 */ }

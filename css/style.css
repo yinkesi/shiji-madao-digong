@@ -53,6 +53,22 @@ button { font-family: inherit; }
 .t-meta b { color: var(--gold); }
 .t-foot { color: #3d4a63; font-size: 12px; letter-spacing: .3em; margin-top: 16px; }
 
+/* ============ 四格漫画 ============ */
+.comic-page { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.comic-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+  width: min(640px, 92vw);
+}
+.comic-cell {
+  width: 100%; aspect-ratio: 10 / 7; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+.comic-line {
+  min-height: 3.2em; max-width: 620px; text-align: center;
+  color: var(--bone); font-size: 15px; line-height: 1.9;
+  padding: 0 8px;
+}
+
 /* ============ 序章 ============ */
 #prologue-screen { display: flex; align-items: center; justify-content: center; }
 #pro-box { max-width: 640px; padding: 30px 26px; }
