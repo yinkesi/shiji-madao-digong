@@ -152,13 +152,18 @@
     return 3;
   }
 
-  /* J：朝面朝方向攻击/交互（本作最重要的单键） */
+  /* J：朝面朝方向纯攻击/互动——绝不移动（无目标则挥空，不耗回合） */
   function interactForward() {
     if (busy()) return;
     const G = game.G;
     const tx = G.player.x + facing[0], ty = G.player.y + facing[1];
-    if (!MDG.Grid.inB(G.map, tx, ty)) { MDG.APP.toast("面前是虚空"); return; }
-    act({ t: "move", dx: facing[0], dy: facing[1] });
+    if (!MDG.Grid.inB(G.map, tx, ty)) { MDG.APP.toast("面前是虚空——挥刀落空"); return; }
+    const Gr = MDG.Grid;
+    const tile = Gr.at(G.map, tx, ty);
+    const foe = MDG.Engine.unitAt(G, tx, ty);
+    const interactive = !!foe || [Gr.CHEST, Gr.CAMPFIRE, Gr.SHOP, Gr.STAIRS, Gr.TREE].includes(tile);
+    if (interactive) { act({ t: "move", dx: facing[0], dy: facing[1] }); return; }
+    MDG.APP.toast("前方无目标——挥刀落空（方向键 / WASD 移动）");
   }
 
   /* 点击画布（鼠标功能全保留） */

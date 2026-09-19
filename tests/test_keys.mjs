@@ -80,6 +80,36 @@ const helpTxt = await page.evaluate(() => document.getElementById("panel-body").
 await page.keyboard.press("Escape");
 console.log("8 H 帮助:", helpTxt.includes("目标") ? "OK" : "FAIL「" + helpTxt + "」");
 
+// 8.5) J 纯攻击：面前无目标不移动；有敌才出手
+{
+  // 朝左走一步（facing=左），面前即刚离开的空地 → J 必须不移动
+  const p0 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
+  await page.keyboard.press("a"); await page.waitForTimeout(200);
+  const p1 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
+  await page.keyboard.press("j"); await page.waitForTimeout(200);
+  const p2 = await page.evaluate(() => ({ x: MDG.Main.game.G.player.x, y: MDG.Main.game.G.player.y }));
+  console.log("8a J 空挥不动:", (p2.x === p1.x && p2.y === p1.y) ? "OK" : "FAIL " + JSON.stringify([p1, p2]));
+  // 面前放个敌，按 J 应攻击且玩家不动
+  const r = await page.evaluate(() => {
+    const G = MDG.Main.game.G;
+    G.enemies = [];
+    const foe = { uid: "kj2", chId: "mob", name: "桩", glyph: "桩", color: "#333", side: "e",
+      x: G.player.x - 1, y: G.player.y, hp: 30, maxHp: 30, dmg: 0, saw: 0, moveRange: 1, passive: null, skills: [],
+      st: { stun: 0, disarm: 0, poison: 0, shield: 0, emp: 0, grudge: 0, buffKnife: 0 },
+      boss: false, elite: false, mob: true, aggro: false, dead: false, lethalUsed: false, firstHitTaken: false,
+      telegraph: false, _parried: false, parryCd: 0 };
+    G.enemies.push(foe);
+    return { hp0: foe.hp, x0: G.player.x, y0: G.player.y, facingLeft: MDG.Input.facing()[0] === -1 };
+  });
+  await page.keyboard.press("j"); await page.waitForTimeout(250);
+  const r2 = await page.evaluate(() => {
+    const G = MDG.Main.game.G;
+    const foe = G.enemies.find(u => u.uid === "kj2");
+    return { dmg: foe ? 30 - foe.hp : 99, px: G.player.x, py: G.player.y };
+  });
+  console.log("8b J 有敌才打:", (r.facingLeft && r2.dmg >= 2 && r2.px === r.x0 && r2.py === r.y0) ? "OK（伤" + r2.dmg + "，未移动）" : "FAIL " + JSON.stringify([r, r2]));
+}
+
 // 9) 全程无页面错误
 console.log("9 页面错误:", errs.length ? "FAIL " + errs.join(" | ") : "OK（无）");
 await page.screenshot({ path: "testshots/keys-final.png" });
