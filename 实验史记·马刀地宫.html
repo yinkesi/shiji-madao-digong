@@ -133,6 +133,17 @@ button { font-family: inherit; }
 }
 .hbtn:hover { color: var(--gold-bright); border-color: var(--gold); }
 #minimap { position: absolute; top: 76px; right: 14px; border: 1px solid var(--line); background: rgba(7,11,20,.85); border-radius: 4px; }
+#objective-bar {
+  position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%);
+  background: rgba(12,18,32,.92); border: 1px solid var(--gold); border-radius: 4px;
+  padding: 7px 18px; font-size: 14px; color: var(--bone); letter-spacing: .05em;
+  display: flex; align-items: center; gap: 10px; max-width: 86vw; white-space: nowrap;
+}
+#objective-bar #obj-key { color: var(--gold-bright); }
+#objective-bar kbd {
+  font-family: inherit; color: var(--gold-bright); border: 1px solid var(--gold);
+  border-radius: 3px; padding: 0 6px; margin: 0 2px; font-size: 12px;
+}
 #skillbar {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   display: flex; gap: 8px; align-items: flex-end;
@@ -284,6 +295,7 @@ button { font-family: inherit; }
       </div>
     </div>
     <canvas id="minimap" width="156" height="120"></canvas>
+    <div id="objective-bar"><span id="obj-key">▸</span><span id="obj-text"></span></div>
     <div id="skillbar"></div>
     <div id="log"></div>
     <div id="floor-card" class="hidden"><div id="fc-num"></div><div id="fc-name"></div><div id="fc-intro"></div></div>
@@ -1239,6 +1251,8 @@ button { font-family: inherit; }
             addSkill(G.player, sk);
             ev(G, { t: "learn", name: sk.name, chId: def.chId });
             log(G, "录技：「" + sk.name + "」入谱。");
+            const T = G.tut || (G.tut = {});
+            if (!T.learn) { T.learn = true; ev(G, { t: "tut", k: "learn" }); }
           }
         }
         ev(G, { t: "dex", chId: def.chId });
@@ -1255,6 +1269,8 @@ button { font-family: inherit; }
       G.relics.push(id);
       ev(G, { t: "relic", id, name: R[id].name });
       log(G, "得刀卡「" + R[id].name + "」——" + R[id].desc);
+      const T = G.tut || (G.tut = {});
+      if (!T.relic) { T.relic = true; ev(G, { t: "tut", k: "relic" }); }
     }
     G.money += 15 + G.r.int(0, 10);
   }
@@ -1527,8 +1543,37 @@ button { font-family: inherit; }
     if (!G.over && open && G.floorDef.rule === "suomen") G.key = true;
     /* 尸体清扫：亡者出列（存档与遍历都不再背负） */
     for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
+    /* 教学事件：首次见闻各要素，各发一次（G.tut 见过即记） */
+    tutorialEvents(G, action);
     G.round++;
     return evs.slice();
+  }
+
+  /* ---- 引导：首次见闻推送（表现层转 toast）---- */
+  function tutorialEvents(G, action) {
+    const T = G.tut || (G.tut = {});
+    const once = (k) => { if (!T[k]) { T[k] = true; return true; } return false; };
+    const p = G.player;
+    const Gr = G3();
+    /* 附近扫一眼（视野半径内找最要紧的一样，每动至多推一条，不刷屏） */
+    if (once("move") && action.t === "move") ev(G, { t: "tut", k: "move" });
+    const R = 8;
+    let found = null, foundD = 99;
+    for (let y = Math.max(0, p.y - R); y <= Math.min(G.map.h - 1, p.y + R); y++) {
+      for (let x = Math.max(0, p.x - R); x <= Math.min(G.map.w - 1, p.x + R); x++) {
+        if (!Gr.los(G.map, p.x, p.y, x, y)) continue;
+        const tile = Gr.at(G.map, x, y);
+        const d = Gr.manh(p.x, p.y, x, y);
+        let kind = null;
+        if (tile === Gr.CAMPFIRE && !G.campUsed) kind = "camp";
+        else if (tile === Gr.CHEST) kind = "chest";
+        else if (tile === Gr.SCROLL) kind = "scroll";
+        else if (tile === Gr.SHOP) kind = "shop";
+        else if (tile === Gr.STAIRS) kind = G._stairsOpen ? "stairsOpen" : "stairsLocked";
+        if (kind && d < foundD) { found = kind; foundD = d; }
+      }
+    }
+    if (found && once(found)) ev(G, { t: "tut", k: found });
   }
 
   function doMove(G, p, dx, dy) {
@@ -2373,6 +2418,20 @@ button { font-family: inherit; }
         }
       }
     }
+    /* 键盘光标 */
+    if (MDG.Input && MDG.Input.cursorActive && MDG.Input.cursorActive()) {
+      const [cx2, cy2] = MDG.Input.cursorPos();
+      const mode = MDG.Input.cursorMode();
+      const col = mode === "skill" ? "rgba(236,211,154,.9)" : mode === "item" ? "rgba(125,201,154,.9)" : "rgba(154,167,196,.9)";
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      const t = now / 300;
+      const pad = 2 + Math.sin(t) * 1.5;
+      ctx.strokeRect(cx2 * TILE + pad, cy2 * TILE + pad, TILE - pad * 2, TILE - pad * 2);
+      ctx.fillStyle = col;
+      ctx.font = "10px serif";
+      ctx.fillText("J", cx2 * TILE + 3, cy2 * TILE + 11);
+    }
     /* 活体 */
     for (let i = 0; i < G.enemies.length; i++) {
       const u = G.enemies[i];
@@ -2454,6 +2513,60 @@ button { font-family: inherit; }
 
   function bind(g) { game = g; }
 
+  /* ---------------- 引导：教学 toast 与目标提示条 ---------------- */
+  const TUT_TEXT = {
+    move: "方向键 / WASD 走一格；J 朝面朝方向攻击/交互（撞箱、灶、梯、商摊皆可）",
+    camp: "前方有【灶间】——走近按 J：血满、技冷尽清，进镇守房前必歇",
+    chest: "前方有【木箱】——朝它按 J 开箱：钱、吃食或刀卡",
+    scroll: "前方有【史料】——走过即拾，文脉+1",
+    shop: "前方有【小卖部】——按 J 进店，零花钱购物（↑↓ 选、Enter 买）",
+    stairsLocked: "前方是【楼梯】——被镇守封着；先寻镇守斩之，梯方开",
+    stairsOpen: "【楼梯已开】——站上楼梯按 J，下行下一层",
+    learn: "录技成功！按 U/I/O/P（或数字键）施放，详见刀谱（C）",
+    relic: "得刀卡【遗物】——本轮全程有效，详见行囊（B）"
+  };
+  function pushTut(evs) {
+    evs.forEach(e => {
+      if (e.t !== "tut") return;
+      const msg = TUT_TEXT[e.k];
+      if (msg) toast(msg, 3600);
+    });
+  }
+  /* 目标提示条：按局势给一句话 + 键位提示 */
+  function refreshObjective() {
+    const G = game.G;
+    if (!G || G.over) return;
+    const bar = document.getElementById("objective-bar");
+    if (!bar) return;
+    const key = (k) => "<kbd>" + k + "</kbd>";
+    let html = "";
+    if (MDG.Engine.stairsOpenNow(G)) {
+      html = "楼梯已开——寻梯按 " + key("J") + " 下行（小地图金点）";
+    } else {
+      const foes = MDG.Engine.livingEnemies(G).filter(u => u.chId !== "tree");
+      const hunters = foes.filter(u => u.aggro);
+      const boss = foes.find(u => u.boss);
+      if (G.player.hp < G.player.maxHp * 0.4 && G.items.some(i => i.id === "fantuan" || i.id === "mantou")) {
+        html = "血量告急——按 " + key("B") + " 开行囊吃口饭";
+      } else if (hunters.length) {
+        html = hunters[0].name + "追上来了——" + key("J") + " 迎击，或走位甩开";
+      } else if (G.player.st.disarm > 0) {
+        html = "技被封" + G.player.st.disarm + "回合——" + key("J") + " 用刀，稳住";
+      } else if (boss && !boss.aggro) {
+        html = "镇守【" + boss.name + "】未惊动——绕后 " + key("J") + " 先手+2（急击勿失）";
+      } else if (boss) {
+        html = "与【" + boss.name + "】缠斗——半血先歇灶间，血祭留给精英";
+      } else if (foes.length) {
+        html = "寻敌而战——" + key("J") + " 攻击；" + key("U/I/O/P") + " 用技";
+      } else {
+        html = "清完此层了？找找镇守在哪（小地图找金点）";
+      }
+    }
+    const t = document.getElementById("obj-text");
+    if (t && t.dataset.last !== html) { t.innerHTML = html; t.dataset.last = html; }
+    bar.style.display = "";
+  }
+
   /* ---------------- 顶栏 ---------------- */
   function refreshHUD() {
     const G = game.G, M = game.meta;
@@ -2478,9 +2591,11 @@ button { font-family: inherit; }
     const G = game.G;
     const bar = $("skillbar");
     bar.innerHTML = "";
+    const HOT = ["U", "I", "O", "P"];
     G.player.skills.forEach((sk, i) => {
       const d = el("div", "skill" + (MDG.UI.armed.get() === i ? " armed" : ""));
-      d.innerHTML = `<span class="key">${i + 1}</span><b>${sk.name}</b><i>${sk.kind === "self" ? "自身" : sk.kind === "global" ? "全场" : "距" + (sk.range || 1)}</i>`;
+      const hot = HOT[i] || (i + 1);
+      d.innerHTML = `<span class="key">${hot}</span><b>${sk.name}</b><i>${sk.kind === "self" ? "自身" : sk.kind === "global" ? "全场" : "距" + (sk.range || 1)}</i>`;
       if (sk.cdLeft > 0) {
         const cd = el("div", "cd", String(sk.cdLeft));
         d.appendChild(cd);
@@ -2490,6 +2605,7 @@ button { font-family: inherit; }
     });
     const wait = el("div", "skill");
     wait.innerHTML = `<span class="key">空格</span><b>待机</b><i>回合一</i>`;
+    void 0;
     wait.onclick = () => MDG.Input.act({ t: "wait" });
     bar.appendChild(wait);
   }
@@ -2533,7 +2649,7 @@ button { font-family: inherit; }
         r.innerHTML = `<div class="grow"><b>${def.name}</b>×${it.n}<div class="muted">${def.desc}</div></div>`;
         const use = el("button", "pbtn", "用");
         use.onclick = () => {
-          if (def.kind === "throw") { toast("掷出之物流需点选目标——暂从行囊掷之"); window.MDG.Input.armItem(i); closePanel(); return; }
+          if (def.kind === "throw") { window.MDG.Input.armItem(i); closePanel(); return; }
           MDG.Input.act({ t: "item", ii: i });
           closePanel();
         };
@@ -2754,16 +2870,21 @@ button { font-family: inherit; }
     if (!holdHidden) $("end-screen").classList.remove("hidden");
   }
 
-  MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd };
+  MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, pushTut, refreshObjective, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd };
 })();
 
 </script>
 <script>
 /* ============================================================
- * 实验史记 · 马刀地宫 —— 手谈卷（键鼠输入）
- * 键盘：方向/WASD 走、数字用技、空格待机、I 行囊、K 刀谱、
- *       J 图鉴、M 静音、Esc 关面板。
- * 鼠标：点邻格互动；点远处自动行走（见敌即停）。
+ * 实验史记 · 马刀地宫 —— 手谈卷（键鼠输入）· 经典键位
+ * 键盘（全部操作可无鼠标完成）：
+ *   移动     方向键 / WASD
+ *   攻击/交互 J（朝面朝方向：撞敌即刀击；撞箱/灶/梯/商即互动）
+ *   技能1-4   U / I / O / P（数字键 1-9 仍可用）
+ *   待机     空格 或 .
+ *   光标模式  Tab 呼出 → 方向键移格 → J/Enter 确认（选目标施技/掷物/远眺）
+ *   行囊 B · 刀谱 C · 图鉴 V · 帮助 H · 静音 M · Esc 关闭/取消
+ * 鼠标（全保留）：点邻格互动；点远处自动行走；面板点选。
  * 挂载：MDG.Input
  * ============================================================ */
 (function () {
@@ -2774,12 +2895,19 @@ button { font-family: inherit; }
   let game = null;
   let autoWalk = null; // {path: [[x,y]...], i}
   let itemArmed = -1;  // 待掷之物的行囊序号
+  let facing = [1, 0]; // 面朝方向（J 攻击/交互用）
+  /* 光标模式：{-1 关, 否则为 [x,y]}；模式 'skill' 施技 / 'item' 掷物 / 'free' 自由查看 */
+  let cursor = -1;
+  let cursorMode = "free";
+  let usingMouse = true;
 
   function bind(g) { game = g; }
 
   const busy = () => !game || !game.G || game.animating || MDG.HUD.panelOpen() || game.overShown;
 
   function act(a) {
+    /* 面板内发起的动作（行囊用物等）：先关面板再执行，否则 busy() 自锁 */
+    if (MDG.HUD.panelOpen()) MDG.HUD.closePanel();
     if (busy()) return;
     cancelAuto();
     game.doAction(a);
@@ -2787,29 +2915,133 @@ button { font-family: inherit; }
 
   function cancelAuto() { autoWalk = null; }
 
-  /* 用技入口（技能栏/数字键共用） */
+  /* 面朝方向随移动更新（斜向不存在，四向即够） */
+  function face(dx, dy) { facing = [dx, dy]; }
+  function faceToward(x, y) {
+    const G = game.G;
+    const dx = x - G.player.x, dy = y - G.player.y;
+    if (Math.abs(dx) >= Math.abs(dy)) facing = [Math.sign(dx) || 1, 0];
+    else facing = [0, Math.sign(dy) || 1];
+  }
+
+  /* 用技入口（热键/技能栏/光标确认共用） */
   function onSkillKey(si) {
     if (busy()) return;
     const G = game.G;
     const sk = G.player.skills[si];
-    if (!sk) return;
+    if (!sk) { MDG.APP.toast("无此技"); return; }
     if (sk.cdLeft > 0) { MDG.APP.toast("「" + sk.name + "」冷却中（" + sk.cdLeft + "）"); return; }
     if (G.player.st.disarm > 0) { MDG.APP.toast("汝之技被封——" + G.player.st.disarm + "回合后方可再用"); return; }
     if (sk.kind === "unit") {
-      /* 需目标：进入点选模式 */
-      if (MDG.UI.armed.get() === si) { MDG.UI.armed.set(-1); return; }
+      /* 需目标：进光标模式（键盘）——鼠标用户照旧点选 */
+      if (MDG.UI.armed.get() === si && cursorMode === "skill") { disarmCursor(); return; }
       MDG.UI.armed.set(si);
-      MDG.APP.toast("点选目标施「" + sk.name + "」（Esc 取消）");
+      enterCursor("skill", "点选目标施「" + sk.name + "」——方向键移光标，J 确认，Esc 取消");
       return;
     }
     act({ t: "skill", si, tx: null, ty: null });
   }
 
-  function armItem(ii) { itemArmed = ii; MDG.APP.toast("点选掷掷目标（Esc 取消）"); }
+  function armItem(ii) {
+    itemArmed = ii;
+    MDG.UI.armed.set(-1);
+    enterCursor("item", "点选掷掷目标——方向键移光标，J 确认，Esc 取消");
+  }
 
-  /* 点击画布 */
+  /* ---------------- 光标模式 ---------------- */
+  function enterCursor(mode, tip) {
+    const G = game.G;
+    cursorMode = mode;
+    if (!Array.isArray(cursor)) {
+      /* 初始落点：优先面朝方向的邻敌 */
+      const fx = G.player.x + facing[0], fy = G.player.y + facing[1];
+      const foe = MDG.Engine.unitAt(G, fx, fy);
+      cursor = (mode !== "free" && foe && foe.side === "e") ? [fx, fy] : [G.player.x + facing[0] * 2, G.player.y + facing[1] * 2];
+      clampCursor();
+    }
+    usingMouse = false;
+    if (tip) MDG.APP.toast(tip);
+  }
+  function disarmCursor() {
+    cursor = -1; cursorMode = "free";
+    MDG.UI.armed.set(-1); itemArmed = -1;
+  }
+  const cursorActive = () => Array.isArray(cursor);
+  function clampCursor() {
+    const G = game.G;
+    cursor[0] = Math.max(0, Math.min(G.map.w - 1, cursor[0]));
+    cursor[1] = Math.max(0, Math.min(G.map.h - 1, cursor[1]));
+  }
+  function cursorMove(dx, dy) {
+    if (!cursorActive()) return;
+    cursor[0] += dx; cursor[1] += dy;
+    clampCursor();
+    usingMouse = false;
+    MDG.APP.sfx.ui();
+  }
+  /* 光标确认：按模式分发 */
+  function cursorConfirm() {
+    const G = game.G;
+    const [wx, wy] = cursor;
+    if (cursorMode === "skill") {
+      const si = MDG.UI.armed.get();
+      const sk = G.player.skills[si];
+      if (sk && sk.kind === "unit") {
+        const d = MDG.Grid.manh(G.player.x, G.player.y, wx, wy);
+        const foe = MDG.Engine.unitAt(G, wx, wy);
+        if (!foe || foe.side !== "e") { MDG.APP.toast("那里没有敌人"); return; }
+        if (d > (sk.range || 1)) { MDG.APP.toast("超出射程（距" + (sk.range || 1) + "）"); return; }
+        disarmCursor();
+        act({ t: "skill", si, tx: wx, ty: wy });
+        return;
+      }
+    }
+    if (cursorMode === "item") {
+      const it = G.items[itemArmed];
+      if (!it) { disarmCursor(); return; }
+      const def = MDG.DATA.ITEMS[it.id];
+      const foe = MDG.Engine.unitAt(G, wx, wy);
+      if (def.kind === "throw") {
+        if (!foe || foe.side !== "e") { MDG.APP.toast("那里没有敌人"); return; }
+        if (MDG.Grid.manh(G.player.x, G.player.y, wx, wy) > (def.range || 3)) { MDG.APP.toast("超出射程"); return; }
+        const ii = itemArmed;
+        disarmCursor();
+        act({ t: "item", ii, tx: wx, ty: wy });
+        return;
+      }
+      /* 非投掷物：就地使用 */
+      const ii = itemArmed;
+      disarmCursor();
+      act({ t: "item", ii });
+      return;
+    }
+    /* free 模式：邻格则交互，远处设面朝 */
+    const d = MDG.Grid.manh(G.player.x, G.player.y, wx, wy);
+    if (d === 0) { disarmCursor(); act({ t: "wait" }); return; }
+    if (d === 1) { disarmCursor(); act({ t: "move", dx: wx - G.player.x, dy: wy - G.player.y }); return; }
+    faceToward(wx, wy);
+    MDG.APP.toast("面朝「" + ["东", "西", "南", "北"][facingIndex()] + "」——J 攻击/交互，或继续移光标");
+  }
+  function facingIndex() {
+    if (facing[0] === 1) return 0;
+    if (facing[0] === -1) return 1;
+    if (facing[1] === 1) return 2;
+    return 3;
+  }
+
+  /* J：朝面朝方向攻击/交互（本作最重要的单键） */
+  function interactForward() {
+    if (busy()) return;
+    const G = game.G;
+    const tx = G.player.x + facing[0], ty = G.player.y + facing[1];
+    if (!MDG.Grid.inB(G.map, tx, ty)) { MDG.APP.toast("面前是虚空"); return; }
+    act({ t: "move", dx: facing[0], dy: facing[1] });
+  }
+
+  /* 点击画布（鼠标功能全保留） */
   function onCanvasClick(mx, my) {
     if (busy()) return;
+    usingMouse = true;
     const G = game.G;
     const { cam } = getCam();
     const dpr = devicePixelRatio;
@@ -2817,30 +3049,16 @@ button { font-family: inherit; }
     const wx = Math.floor((mx - (cv.width / dpr / 2 - cam.x)) / TILE);
     const wy = Math.floor((my - (cv.height / dpr / 2 - cam.y)) / TILE);
     if (!MDG.Grid.inB(G.map, wx, wy)) return;
-    /* 掷物模式 */
-    if (itemArmed >= 0) {
-      const a = { t: "item", ii: itemArmed, tx: wx, ty: wy };
-      itemArmed = -1;
-      act(a);
-      return;
-    }
-    /* 施技点选 */
-    const armed = MDG.UI.armed.get();
-    if (armed >= 0) {
-      const a = { t: "skill", si: armed, tx: wx, ty: wy };
-      MDG.UI.armed.set(-1);
-      act(a);
-      return;
-    }
+    /* 鼠标也能接手光标确认 */
+    if (cursorActive()) { cursor = [wx, wy]; cursorConfirm(); return; }
     const d = MDG.Grid.manh(G.player.x, G.player.y, wx, wy);
-    const foe = MDG.Engine.unitAt(G, wx, wy);
     if (d === 1) {
-      /* 邻格：方向互动（撞敌/撞箱/撞梯……） */
+      face(wx - G.player.x, wy - G.player.y);
       act({ t: "move", dx: wx - G.player.x, dy: wy - G.player.y });
       return;
     }
     if (d === 0) { act({ t: "wait" }); return; }
-    /* 远处：自动走 */
+    faceToward(wx, wy);
     const path = pathTo(G, G.player.x, G.player.y, wx, wy);
     if (path) { autoWalk = { path, i: 0 }; stepAuto(); }
   }
@@ -2885,7 +3103,6 @@ button { font-family: inherit; }
     if (!autoWalk) return;
     if (busy()) { cancelAuto(); return; }
     const G = game.G;
-    /* 见敌即停：视野内有惊动之敌 */
     const threat = G.enemies.some(u => !u.dead && u.chId !== "tree" && u.aggro &&
       G._visible && G._visible[u.x + "," + u.y]);
     if (threat) { cancelAuto(); MDG.APP.toast("见敌——自动行走止"); return; }
@@ -2894,12 +3111,36 @@ button { font-family: inherit; }
     const [nx, ny] = p.path[p.i];
     const dx = nx - G.player.x, dy = ny - G.player.y;
     if (Math.abs(dx) + Math.abs(dy) !== 1) { cancelAuto(); return; }
+    face(dx, dy);
     game.doAction({ t: "move", dx, dy }, () => {
       if (!autoWalk) return;
       p.i++;
       if (p.i >= p.path.length) { cancelAuto(); return; }
       setTimeout(stepAuto, 70);
     });
+  }
+
+  /* 面板键盘导航：↑↓ 选行，Enter 确认 */
+  let panelIdx = 0;
+  function panelKeys(k) {
+    const rows = [...document.querySelectorAll("#panel-body .row")].filter(r => r.offsetParent);
+    if (!rows.length) return false;
+    if (panelIdx >= rows.length) panelIdx = 0;
+    const btnsOf = (r) => [...r.querySelectorAll("button")].filter(b => !b.disabled);
+    if (k === "ArrowDown" || k === "j2") { panelIdx = Math.min(rows.length - 1, panelIdx + 1); }
+    else if (k === "ArrowUp") { panelIdx = Math.max(0, panelIdx - 1); }
+    else if (k === "Enter") {
+      const r = rows[panelIdx];
+      const bs = btnsOf(r);
+      if (bs.length) { bs[0].click(); return true; }
+      if (r.onclick) { r.onclick(); return true; }
+      return true;
+    }
+    else return false;
+    rows.forEach((r, i) => { r.style.borderColor = i === panelIdx ? "var(--gold-bright)" : ""; r.style.background = i === panelIdx ? "var(--panel-2)" : ""; });
+    rows[panelIdx].scrollIntoView({ block: "nearest" });
+    MDG.APP.sfx.ui();
+    return true;
   }
 
   /* 键盘 */
@@ -2913,22 +3154,48 @@ button { font-family: inherit; }
       return;
     }
     const inGame = game && game.G && !game.overShown;
+    /* 面板开着：↑↓/Enter 导航，Esc 关闭 */
+    if (MDG.HUD.panelOpen()) {
+      if (k === "Escape") { MDG.HUD.closePanel(); return; }
+      if (k === "ArrowDown" || k === "ArrowUp" || k === "Enter") { e.preventDefault(); panelKeys(k); MDG.APP && 0; return; }
+      return;
+    }
     if (k === "Escape") {
-      if (MDG.HUD.panelOpen()) { MDG.HUD.closePanel(); return; }
+      if (cursorActive()) { disarmCursor(); MDG.APP.toast("已取消"); return; }
       if (MDG.UI.armed.get() >= 0 || itemArmed >= 0) { MDG.UI.armed.set(-1); itemArmed = -1; return; }
       if (inGame) MDG.HUD.openSys();
       return;
     }
-    if (MDG.HUD.panelOpen()) return;
     if (!inGame) return;
     const G = game.G;
+
+    /* 光标模式：方向移格 / J·Enter 确认 */
+    if (cursorActive()) {
+      const mv = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0] }[k];
+      if (mv) { e.preventDefault(); cursorMove(mv[0], mv[1]); return; }
+      if (k === "j" || k === "J" || k === "Enter") { e.preventDefault(); cursorConfirm(); return; }
+      if (k === "Tab") { e.preventDefault(); disarmCursor(); return; }
+      return;
+    }
+
+    /* 移动 */
     const move = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0] }[k];
-    if (move) { e.preventDefault(); act({ t: "move", dx: move[0], dy: move[1] }); return; }
-    if (k === " " || k === ".") { e.preventDefault(); act({ t: "wait" }); return; }
+    if (move) { e.preventDefault(); face(move[0], move[1]); act({ t: "move", dx: move[0], dy: move[1] }); return; }
+    /* J：攻击/交互（面朝方向） */
+    if (k === "j" || k === "J" || k === "Enter") { e.preventDefault(); interactForward(); return; }
+    /* U/I/O/P：技能 1-4；数字键 1-9 仍可用 */
+    const skIdx = { u: 0, i: 1, o: 2, p: 3 }[k.toLowerCase()];
+    if (skIdx !== undefined && k.toLowerCase() === k) { onSkillKey(skIdx); return; }
     if (/^[1-9]$/.test(k)) { onSkillKey(parseInt(k, 10) - 1); return; }
-    if (k === "i" || k === "I") { MDG.HUD.openBag(); return; }
-    if (k === "k" || k === "K") { MDG.HUD.openBlades(); return; }
-    if (k === "j" || k === "J") { MDG.HUD.openDex(); return; }
+    /* 待机 */
+    if (k === " " || k === ".") { e.preventDefault(); act({ t: "wait" }); return; }
+    /* 光标模式呼出（Tab） */
+    if (k === "Tab") { e.preventDefault(); enterCursor("free", "光标模式——方向键移格，J 交互，Esc/Tab 退出"); return; }
+    /* 面板与系统 */
+    if (k === "b" || k === "B") { MDG.HUD.openBag(); return; }
+    if (k === "c" || k === "C") { MDG.HUD.openBlades(); return; }
+    if (k === "v" || k === "V") { MDG.HUD.openDex(); return; }
+    if (k === "h" || k === "H" || k === "?") { MDG.HUD.openHelp(); return; }
     if (k === "m" || k === "M") {
       game.meta.settings.muted = !game.meta.settings.muted;
       MDG.Meta.save(game.meta);
@@ -2949,7 +3216,11 @@ button { font-family: inherit; }
     $("panel-mask").addEventListener("click", (e) => { if (e.target === $("panel-mask")) MDG.HUD.closePanel(); });
   }
 
-  MDG.Input = { bind, init, act, onSkillKey, armItem, cancelAuto };
+  MDG.Input = {
+    bind, init, act, onSkillKey, armItem, cancelAuto,
+    facing: () => facing.slice(),
+    cursorActive, cursorPos: () => (Array.isArray(cursor) ? cursor.slice() : null), cursorMode: () => cursorMode
+  };
 })();
 
 </script>
@@ -3099,6 +3370,7 @@ button { font-family: inherit; }
   function consumeEvents(evs) {
     MDG.UI.playEvents(game.G, evs);
     MDG.HUD.pushLog(evs);
+    MDG.HUD.pushTut(evs);
     evs.forEach(e => {
       if (e.t === "shop") { MDG.HUD.openShop(); }
       if (e.t === "learn") { MDG.HUD.refreshSkillbar(); }
@@ -3111,6 +3383,7 @@ button { font-family: inherit; }
     MDG.UI.updateFov(G);
     MDG.HUD.refreshHUD();
     MDG.HUD.refreshSkillbar();
+    MDG.HUD.refreshObjective();
     MDG.Run.saveRun(G);
     if ((G.over || G.won) && !game.overShown) {
       game.overShown = true;

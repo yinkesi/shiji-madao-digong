@@ -143,6 +143,7 @@
   function consumeEvents(evs) {
     MDG.UI.playEvents(game.G, evs);
     MDG.HUD.pushLog(evs);
+    MDG.HUD.pushTut(evs);
     evs.forEach(e => {
       if (e.t === "shop") { MDG.HUD.openShop(); }
       if (e.t === "learn") { MDG.HUD.refreshSkillbar(); }
@@ -155,6 +156,7 @@
     MDG.UI.updateFov(G);
     MDG.HUD.refreshHUD();
     MDG.HUD.refreshSkillbar();
+    MDG.HUD.refreshObjective();
     MDG.Run.saveRun(G);
     if ((G.over || G.won) && !game.overShown) {
       game.overShown = true;

@@ -12,6 +12,60 @@
 
   function bind(g) { game = g; }
 
+  /* ---------------- 引导：教学 toast 与目标提示条 ---------------- */
+  const TUT_TEXT = {
+    move: "方向键 / WASD 走一格；J 朝面朝方向攻击/交互（撞箱、灶、梯、商摊皆可）",
+    camp: "前方有【灶间】——走近按 J：血满、技冷尽清，进镇守房前必歇",
+    chest: "前方有【木箱】——朝它按 J 开箱：钱、吃食或刀卡",
+    scroll: "前方有【史料】——走过即拾，文脉+1",
+    shop: "前方有【小卖部】——按 J 进店，零花钱购物（↑↓ 选、Enter 买）",
+    stairsLocked: "前方是【楼梯】——被镇守封着；先寻镇守斩之，梯方开",
+    stairsOpen: "【楼梯已开】——站上楼梯按 J，下行下一层",
+    learn: "录技成功！按 U/I/O/P（或数字键）施放，详见刀谱（C）",
+    relic: "得刀卡【遗物】——本轮全程有效，详见行囊（B）"
+  };
+  function pushTut(evs) {
+    evs.forEach(e => {
+      if (e.t !== "tut") return;
+      const msg = TUT_TEXT[e.k];
+      if (msg) toast(msg, 3600);
+    });
+  }
+  /* 目标提示条：按局势给一句话 + 键位提示 */
+  function refreshObjective() {
+    const G = game.G;
+    if (!G || G.over) return;
+    const bar = document.getElementById("objective-bar");
+    if (!bar) return;
+    const key = (k) => "<kbd>" + k + "</kbd>";
+    let html = "";
+    if (MDG.Engine.stairsOpenNow(G)) {
+      html = "楼梯已开——寻梯按 " + key("J") + " 下行（小地图金点）";
+    } else {
+      const foes = MDG.Engine.livingEnemies(G).filter(u => u.chId !== "tree");
+      const hunters = foes.filter(u => u.aggro);
+      const boss = foes.find(u => u.boss);
+      if (G.player.hp < G.player.maxHp * 0.4 && G.items.some(i => i.id === "fantuan" || i.id === "mantou")) {
+        html = "血量告急——按 " + key("B") + " 开行囊吃口饭";
+      } else if (hunters.length) {
+        html = hunters[0].name + "追上来了——" + key("J") + " 迎击，或走位甩开";
+      } else if (G.player.st.disarm > 0) {
+        html = "技被封" + G.player.st.disarm + "回合——" + key("J") + " 用刀，稳住";
+      } else if (boss && !boss.aggro) {
+        html = "镇守【" + boss.name + "】未惊动——绕后 " + key("J") + " 先手+2（急击勿失）";
+      } else if (boss) {
+        html = "与【" + boss.name + "】缠斗——半血先歇灶间，血祭留给精英";
+      } else if (foes.length) {
+        html = "寻敌而战——" + key("J") + " 攻击；" + key("U/I/O/P") + " 用技";
+      } else {
+        html = "清完此层了？找找镇守在哪（小地图找金点）";
+      }
+    }
+    const t = document.getElementById("obj-text");
+    if (t && t.dataset.last !== html) { t.innerHTML = html; t.dataset.last = html; }
+    bar.style.display = "";
+  }
+
   /* ---------------- 顶栏 ---------------- */
   function refreshHUD() {
     const G = game.G, M = game.meta;
@@ -36,9 +90,11 @@
     const G = game.G;
     const bar = $("skillbar");
     bar.innerHTML = "";
+    const HOT = ["U", "I", "O", "P"];
     G.player.skills.forEach((sk, i) => {
       const d = el("div", "skill" + (MDG.UI.armed.get() === i ? " armed" : ""));
-      d.innerHTML = `<span class="key">${i + 1}</span><b>${sk.name}</b><i>${sk.kind === "self" ? "自身" : sk.kind === "global" ? "全场" : "距" + (sk.range || 1)}</i>`;
+      const hot = HOT[i] || (i + 1);
+      d.innerHTML = `<span class="key">${hot}</span><b>${sk.name}</b><i>${sk.kind === "self" ? "自身" : sk.kind === "global" ? "全场" : "距" + (sk.range || 1)}</i>`;
       if (sk.cdLeft > 0) {
         const cd = el("div", "cd", String(sk.cdLeft));
         d.appendChild(cd);
@@ -48,6 +104,7 @@
     });
     const wait = el("div", "skill");
     wait.innerHTML = `<span class="key">空格</span><b>待机</b><i>回合一</i>`;
+    void 0;
     wait.onclick = () => MDG.Input.act({ t: "wait" });
     bar.appendChild(wait);
   }
@@ -91,7 +148,7 @@
         r.innerHTML = `<div class="grow"><b>${def.name}</b>×${it.n}<div class="muted">${def.desc}</div></div>`;
         const use = el("button", "pbtn", "用");
         use.onclick = () => {
-          if (def.kind === "throw") { toast("掷出之物流需点选目标——暂从行囊掷之"); window.MDG.Input.armItem(i); closePanel(); return; }
+          if (def.kind === "throw") { window.MDG.Input.armItem(i); closePanel(); return; }
           MDG.Input.act({ t: "item", ii: i });
           closePanel();
         };
@@ -312,5 +369,5 @@
     if (!holdHidden) $("end-screen").classList.remove("hidden");
   }
 
-  MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd };
+  MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, pushTut, refreshObjective, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd };
 })();

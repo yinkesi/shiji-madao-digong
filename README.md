@@ -14,6 +14,7 @@
 - **测试**：
   - 引擎层：`for f in tests/test_*.mjs; do node $f; done`（6 套 Node 测试，96 项断言：生成连通性 / 回合引擎 / 九种特则 / 流程结算 / RNG / **平衡哨兵——机器人试玩一层通过率**）；
   - 全链路：`NODE_PATH=<全局 node_modules> node smoke.mjs`（Playwright 17 项：含序章、UI 通道全程打到终局结算，截图入 `testshots/`）；
+  - 键位：`node tests/test_keys.mjs`（全键盘可玩 9 项：J 攻击/U 技/Tab 光标/面板 Enter 导航）；
   - 性能：`node tests/bench_perf.mjs`（FPS 与每帧渲染/存档序列化耗时；渲染管线为离屏预渲染，每帧 ≈0.01ms）；
   - 找茬：`tests/bughunt_*.mjs` 三脚本（猴测不变量/定向探针/UI 走查），已知问题清单见 `BUGS.md`；
   - 单文件复测：`node smoke.mjs "实验史记·马刀地宫.html"`。

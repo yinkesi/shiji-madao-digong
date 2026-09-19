@@ -327,6 +327,20 @@
         }
       }
     }
+    /* 键盘光标 */
+    if (MDG.Input && MDG.Input.cursorActive && MDG.Input.cursorActive()) {
+      const [cx2, cy2] = MDG.Input.cursorPos();
+      const mode = MDG.Input.cursorMode();
+      const col = mode === "skill" ? "rgba(236,211,154,.9)" : mode === "item" ? "rgba(125,201,154,.9)" : "rgba(154,167,196,.9)";
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      const t = now / 300;
+      const pad = 2 + Math.sin(t) * 1.5;
+      ctx.strokeRect(cx2 * TILE + pad, cy2 * TILE + pad, TILE - pad * 2, TILE - pad * 2);
+      ctx.fillStyle = col;
+      ctx.font = "10px serif";
+      ctx.fillText("J", cx2 * TILE + 3, cy2 * TILE + 11);
+    }
     /* 活体 */
     for (let i = 0; i < G.enemies.length; i++) {
       const u = G.enemies[i];

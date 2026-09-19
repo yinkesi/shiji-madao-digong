@@ -283,6 +283,8 @@
             addSkill(G.player, sk);
             ev(G, { t: "learn", name: sk.name, chId: def.chId });
             log(G, "录技：「" + sk.name + "」入谱。");
+            const T = G.tut || (G.tut = {});
+            if (!T.learn) { T.learn = true; ev(G, { t: "tut", k: "learn" }); }
           }
         }
         ev(G, { t: "dex", chId: def.chId });
@@ -299,6 +301,8 @@
       G.relics.push(id);
       ev(G, { t: "relic", id, name: R[id].name });
       log(G, "得刀卡「" + R[id].name + "」——" + R[id].desc);
+      const T = G.tut || (G.tut = {});
+      if (!T.relic) { T.relic = true; ev(G, { t: "tut", k: "relic" }); }
     }
     G.money += 15 + G.r.int(0, 10);
   }
@@ -571,8 +575,37 @@
     if (!G.over && open && G.floorDef.rule === "suomen") G.key = true;
     /* 尸体清扫：亡者出列（存档与遍历都不再背负） */
     for (let i = G.enemies.length - 1; i >= 0; i--) if (G.enemies[i].dead) G.enemies.splice(i, 1);
+    /* 教学事件：首次见闻各要素，各发一次（G.tut 见过即记） */
+    tutorialEvents(G, action);
     G.round++;
     return evs.slice();
+  }
+
+  /* ---- 引导：首次见闻推送（表现层转 toast）---- */
+  function tutorialEvents(G, action) {
+    const T = G.tut || (G.tut = {});
+    const once = (k) => { if (!T[k]) { T[k] = true; return true; } return false; };
+    const p = G.player;
+    const Gr = G3();
+    /* 附近扫一眼（视野半径内找最要紧的一样，每动至多推一条，不刷屏） */
+    if (once("move") && action.t === "move") ev(G, { t: "tut", k: "move" });
+    const R = 8;
+    let found = null, foundD = 99;
+    for (let y = Math.max(0, p.y - R); y <= Math.min(G.map.h - 1, p.y + R); y++) {
+      for (let x = Math.max(0, p.x - R); x <= Math.min(G.map.w - 1, p.x + R); x++) {
+        if (!Gr.los(G.map, p.x, p.y, x, y)) continue;
+        const tile = Gr.at(G.map, x, y);
+        const d = Gr.manh(p.x, p.y, x, y);
+        let kind = null;
+        if (tile === Gr.CAMPFIRE && !G.campUsed) kind = "camp";
+        else if (tile === Gr.CHEST) kind = "chest";
+        else if (tile === Gr.SCROLL) kind = "scroll";
+        else if (tile === Gr.SHOP) kind = "shop";
+        else if (tile === Gr.STAIRS) kind = G._stairsOpen ? "stairsOpen" : "stairsLocked";
+        if (kind && d < foundD) { found = kind; foundD = d; }
+      }
+    }
+    if (found && once(found)) ev(G, { t: "tut", k: found });
   }
 
   function doMove(G, p, dx, dy) {

@@ -126,6 +126,17 @@ button { font-family: inherit; }
 }
 .hbtn:hover { color: var(--gold-bright); border-color: var(--gold); }
 #minimap { position: absolute; top: 76px; right: 14px; border: 1px solid var(--line); background: rgba(7,11,20,.85); border-radius: 4px; }
+#objective-bar {
+  position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%);
+  background: rgba(12,18,32,.92); border: 1px solid var(--gold); border-radius: 4px;
+  padding: 7px 18px; font-size: 14px; color: var(--bone); letter-spacing: .05em;
+  display: flex; align-items: center; gap: 10px; max-width: 86vw; white-space: nowrap;
+}
+#objective-bar #obj-key { color: var(--gold-bright); }
+#objective-bar kbd {
+  font-family: inherit; color: var(--gold-bright); border: 1px solid var(--gold);
+  border-radius: 3px; padding: 0 6px; margin: 0 2px; font-size: 12px;
+}
 #skillbar {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   display: flex; gap: 8px; align-items: flex-end;
