@@ -67,6 +67,8 @@
     camp() { [330, 415, 494, 659].forEach((f, i) => setTimeout(() => tone(f, .18, "sine", .09), i * 110)); },
     chest() { tone(500, .08, "square", .08); setTimeout(() => tone(750, .1, "square", .08), 70); },
     bottle() { noise(.14, .14); tone(120, .12, "square", .1, -40); },
+    parry() { noise(.04, .12); tone(1180, .06, "square", .1); setTimeout(() => tone(1568, .1, "square", .09), 45); },
+    tele() { tone(196, .09, "sawtooth", .05); },
     dead() { [220, 175, 147, 110].forEach((f, i) => setTimeout(() => tone(f, .3, "sawtooth", .1), i * 220)); },
     win() { [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => tone(f, .25, "triangle", .1), i * 160)); }
   };

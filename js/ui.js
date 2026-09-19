@@ -130,6 +130,14 @@
         case "relic": MDG.APP.toast("得刀卡「" + e.name + "」"); S.chest(); break;
         case "alert": if (e.boss) { showBossCard(e.name); S.boss(); } break;
         case "bottle": addFloat(e.x, e.y, "砰！-1", "#c14b3a"); S.bottle(); kick(); break;
+        case "parry":
+          addFloat(e.x, e.y, "弹反！", "#ecd39a");
+          addFlash(e.x, e.y); addFlash(G.player.x, G.player.y);
+          addSlash(G.player.x, G.player.y, e.x, e.y);
+          S.parry(); kick();
+          break;
+        case "stagger": addFloat(e.x, e.y, "失措", "#9aa7c4"); break;
+        case "telegraph": S.tele(); break;
         case "descend": S.stairs(); showFloorCard(G); cam.init = false; break;
         case "win": S.win(); break;
         case "dead": S.dead(); break;
@@ -326,6 +334,20 @@
           if (d > 0 && d <= sk.range && G._visible[x + "," + y]) ctx.strokeRect(x * TILE + 3, y * TILE + 3, TILE - 6, TILE - 6);
         }
       }
+    }
+    /* 弹反窗口：亮刀之敌红框+叹号 */
+    for (let i = 0; i < G.enemies.length; i++) {
+      const u = G.enemies[i];
+      if (u.dead || !u.telegraph || !(G._visible && G._visible[u.x + "," + u.y])) continue;
+      const pulse = .55 + Math.sin(now / 110) * .3;
+      ctx.strokeStyle = "rgba(193,75,58," + pulse.toFixed(2) + ")";
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(u.x * TILE + 1.5, u.y * TILE + 1.5, TILE - 3, TILE - 3);
+      ctx.fillStyle = "#e0705f";
+      ctx.font = "bold 18px serif";
+      ctx.textAlign = "center";
+      ctx.fillText("！", u.x * TILE + TILE / 2, u.y * TILE - 5);
+      ctx.textAlign = "left";
     }
     /* 键盘光标 */
     if (MDG.Input && MDG.Input.cursorActive && MDG.Input.cursorActive()) {

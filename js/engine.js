@@ -30,6 +30,7 @@
       /* boss 身份由入层时的落位显式给定（同一人可镇守一层、又为别层精英） */
       boss: !!opts.boss, elite: !!opts.elite, mob: !!ch.mob,
       aggro: false, dead: false, lethalUsed: false, firstHitTaken: false,
+      telegraph: false, _parried: false, parryCd: 0,
       bossTag: opts.bossTag || null
     };
     return u;
@@ -170,6 +171,15 @@
       return;
     }
     let dmg = opt.dmg || 0;
+    /* 弹反：亮刀之敌被迎击——加伤并令其失措（攻势尽消） */
+    if (att.side === "p" && def.side === "e" && def.telegraph && !def.dead) {
+      dmg += 2;
+      def._parried = true;
+      def.parryCd = 2;
+      def.telegraph = false;
+      ev(G, { t: "parry", x: def.x, y: def.y, name: def.name });
+      log(G, "弹反！" + def.name + "的攻势被荡开——其本回合失措。");
+    }
     /* 情比金坚：相邻之敌，其伤加一 */
     if (G.floorDef.rule === "dyad" && att.side === "e" && kind !== "item") {
       const buddy = livingEnemies(G).some(e => e !== att && !e.dead && G3().manh(e.x, e.y, att.x, att.y) === 1);
@@ -351,6 +361,18 @@
     G._firstKnifeUsed = false;
     G.enemies.forEach(u => { u.firstHitTaken = false; });
     const p = G.player;
+    /* 弹反窗口：邻敌亮刀示警（红框「！」）。刚被弹反者下回合有戒备，不出窗。 */
+    G.enemies.forEach(u => {
+      if (u.parryCd > 0) u.parryCd--;
+      const was = u.telegraph;
+      u.telegraph = !u.dead && u.aggro && u.st.stun === 0 && !(u.parryCd > 0) && !p.dead &&
+        G3().manh(u.x, u.y, p.x, p.y) === 1;
+      if (u.telegraph && !was) {
+        ev(G, { t: "telegraph", x: u.x, y: u.y, name: u.name });
+        const T = G.tut || (G.tut = {});
+        if (!T.telegraph) { T.telegraph = true; ev(G, { t: "tut", k: "telegraph" }); }
+      }
+    });
     if (G.floorDef.rule === "cans" && !p.dead) {
       const lined = livingEnemies(G).some(e => e.x === p.x || e.y === p.y);
       if (lined) {
@@ -385,6 +407,8 @@
       if (G.over) break;
       /* 晕眩 */
       if (u.st.stun > 0) { u.st.stun--; ev(G, { t: "stunned", uid: u.uid }); continue; }
+      /* 被弹反：失措，本回合全行动作 */
+      if (u._parried) { u._parried = false; ev(G, { t: "stagger", x: u.x, y: u.y, name: u.name }); continue; }
       const Gr = G3();
       const dMan = Gr.manh(u.x, u.y, p.x, p.y);
       /* 惊动 */

@@ -1014,6 +1014,7 @@ button { font-family: inherit; }
       /* boss 身份由入层时的落位显式给定（同一人可镇守一层、又为别层精英） */
       boss: !!opts.boss, elite: !!opts.elite, mob: !!ch.mob,
       aggro: false, dead: false, lethalUsed: false, firstHitTaken: false,
+      telegraph: false, _parried: false, parryCd: 0,
       bossTag: opts.bossTag || null
     };
     return u;
@@ -1154,6 +1155,15 @@ button { font-family: inherit; }
       return;
     }
     let dmg = opt.dmg || 0;
+    /* 弹反：亮刀之敌被迎击——加伤并令其失措（攻势尽消） */
+    if (att.side === "p" && def.side === "e" && def.telegraph && !def.dead) {
+      dmg += 2;
+      def._parried = true;
+      def.parryCd = 2;
+      def.telegraph = false;
+      ev(G, { t: "parry", x: def.x, y: def.y, name: def.name });
+      log(G, "弹反！" + def.name + "的攻势被荡开——其本回合失措。");
+    }
     /* 情比金坚：相邻之敌，其伤加一 */
     if (G.floorDef.rule === "dyad" && att.side === "e" && kind !== "item") {
       const buddy = livingEnemies(G).some(e => e !== att && !e.dead && G3().manh(e.x, e.y, att.x, att.y) === 1);
@@ -1335,6 +1345,18 @@ button { font-family: inherit; }
     G._firstKnifeUsed = false;
     G.enemies.forEach(u => { u.firstHitTaken = false; });
     const p = G.player;
+    /* 弹反窗口：邻敌亮刀示警（红框「！」）。刚被弹反者下回合有戒备，不出窗。 */
+    G.enemies.forEach(u => {
+      if (u.parryCd > 0) u.parryCd--;
+      const was = u.telegraph;
+      u.telegraph = !u.dead && u.aggro && u.st.stun === 0 && !(u.parryCd > 0) && !p.dead &&
+        G3().manh(u.x, u.y, p.x, p.y) === 1;
+      if (u.telegraph && !was) {
+        ev(G, { t: "telegraph", x: u.x, y: u.y, name: u.name });
+        const T = G.tut || (G.tut = {});
+        if (!T.telegraph) { T.telegraph = true; ev(G, { t: "tut", k: "telegraph" }); }
+      }
+    });
     if (G.floorDef.rule === "cans" && !p.dead) {
       const lined = livingEnemies(G).some(e => e.x === p.x || e.y === p.y);
       if (lined) {
@@ -1369,6 +1391,8 @@ button { font-family: inherit; }
       if (G.over) break;
       /* 晕眩 */
       if (u.st.stun > 0) { u.st.stun--; ev(G, { t: "stunned", uid: u.uid }); continue; }
+      /* 被弹反：失措，本回合全行动作 */
+      if (u._parried) { u._parried = false; ev(G, { t: "stagger", x: u.x, y: u.y, name: u.name }); continue; }
       const Gr = G3();
       const dMan = Gr.manh(u.x, u.y, p.x, p.y);
       /* 惊动 */
@@ -2096,6 +2120,8 @@ button { font-family: inherit; }
     camp() { [330, 415, 494, 659].forEach((f, i) => setTimeout(() => tone(f, .18, "sine", .09), i * 110)); },
     chest() { tone(500, .08, "square", .08); setTimeout(() => tone(750, .1, "square", .08), 70); },
     bottle() { noise(.14, .14); tone(120, .12, "square", .1, -40); },
+    parry() { noise(.04, .12); tone(1180, .06, "square", .1); setTimeout(() => tone(1568, .1, "square", .09), 45); },
+    tele() { tone(196, .09, "sawtooth", .05); },
     dead() { [220, 175, 147, 110].forEach((f, i) => setTimeout(() => tone(f, .3, "sawtooth", .1), i * 220)); },
     win() { [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => tone(f, .25, "triangle", .1), i * 160)); }
   };
@@ -2593,6 +2619,14 @@ button { font-family: inherit; }
         case "relic": MDG.APP.toast("得刀卡「" + e.name + "」"); S.chest(); break;
         case "alert": if (e.boss) { showBossCard(e.name); S.boss(); } break;
         case "bottle": addFloat(e.x, e.y, "砰！-1", "#c14b3a"); S.bottle(); kick(); break;
+        case "parry":
+          addFloat(e.x, e.y, "弹反！", "#ecd39a");
+          addFlash(e.x, e.y); addFlash(G.player.x, G.player.y);
+          addSlash(G.player.x, G.player.y, e.x, e.y);
+          S.parry(); kick();
+          break;
+        case "stagger": addFloat(e.x, e.y, "失措", "#9aa7c4"); break;
+        case "telegraph": S.tele(); break;
         case "descend": S.stairs(); showFloorCard(G); cam.init = false; break;
         case "win": S.win(); break;
         case "dead": S.dead(); break;
@@ -2790,6 +2824,20 @@ button { font-family: inherit; }
         }
       }
     }
+    /* 弹反窗口：亮刀之敌红框+叹号 */
+    for (let i = 0; i < G.enemies.length; i++) {
+      const u = G.enemies[i];
+      if (u.dead || !u.telegraph || !(G._visible && G._visible[u.x + "," + u.y])) continue;
+      const pulse = .55 + Math.sin(now / 110) * .3;
+      ctx.strokeStyle = "rgba(193,75,58," + pulse.toFixed(2) + ")";
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(u.x * TILE + 1.5, u.y * TILE + 1.5, TILE - 3, TILE - 3);
+      ctx.fillStyle = "#e0705f";
+      ctx.font = "bold 18px serif";
+      ctx.textAlign = "center";
+      ctx.fillText("！", u.x * TILE + TILE / 2, u.y * TILE - 5);
+      ctx.textAlign = "left";
+    }
     /* 键盘光标 */
     if (MDG.Input && MDG.Input.cursorActive && MDG.Input.cursorActive()) {
       const [cx2, cy2] = MDG.Input.cursorPos();
@@ -2895,6 +2943,7 @@ button { font-family: inherit; }
     stairsLocked: "前方是【楼梯】——被镇守封着；先寻镇守斩之，梯方开",
     stairsOpen: "【楼梯已开】——站上楼梯按 J，下行下一层",
     learn: "录技成功！按 U/I/O/P（或数字键）施放，详见刀谱（C）",
+    telegraph: "敌已亮刀（红框！）——此刻按 J 迎击＝弹反：抵消其攻势，伤害+2",
     relic: "得刀卡【遗物】——本轮全程有效，详见行囊（B）"
   };
   function pushTut(evs) {
@@ -2920,6 +2969,8 @@ button { font-family: inherit; }
       const boss = foes.find(u => u.boss);
       if (G.player.hp < G.player.maxHp * 0.4 && G.items.some(i => i.id === "fantuan" || i.id === "mantou")) {
         html = "血量告急——按 " + key("B") + " 开行囊吃口饭";
+      } else if (foes.some(u => u.telegraph)) {
+        html = "敌已亮刀（红框！）——" + key("J") + " 迎击＝弹反：抵消攻势+2伤";
       } else if (hunters.length) {
         html = hunters[0].name + "追上来了——" + key("J") + " 迎击，或走位甩开";
       } else if (G.player.st.disarm > 0) {

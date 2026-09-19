@@ -22,6 +22,7 @@
     stairsLocked: "前方是【楼梯】——被镇守封着；先寻镇守斩之，梯方开",
     stairsOpen: "【楼梯已开】——站上楼梯按 J，下行下一层",
     learn: "录技成功！按 U/I/O/P（或数字键）施放，详见刀谱（C）",
+    telegraph: "敌已亮刀（红框！）——此刻按 J 迎击＝弹反：抵消其攻势，伤害+2",
     relic: "得刀卡【遗物】——本轮全程有效，详见行囊（B）"
   };
   function pushTut(evs) {
@@ -47,6 +48,8 @@
       const boss = foes.find(u => u.boss);
       if (G.player.hp < G.player.maxHp * 0.4 && G.items.some(i => i.id === "fantuan" || i.id === "mantou")) {
         html = "血量告急——按 " + key("B") + " 开行囊吃口饭";
+      } else if (foes.some(u => u.telegraph)) {
+        html = "敌已亮刀（红框！）——" + key("J") + " 迎击＝弹反：抵消攻势+2伤";
       } else if (hunters.length) {
         html = hunters[0].name + "追上来了——" + key("J") + " 迎击，或走位甩开";
       } else if (G.player.st.disarm > 0) {
