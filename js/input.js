@@ -163,7 +163,7 @@
     const foe = MDG.Engine.unitAt(G, tx, ty);
     const interactive = !!foe || [Gr.CHEST, Gr.CAMPFIRE, Gr.SHOP, Gr.STAIRS, Gr.TREE].includes(tile);
     if (interactive) { act({ t: "move", dx: facing[0], dy: facing[1] }); return; }
-    MDG.APP.toast("前方无目标——挥刀落空（方向键 / WASD 移动）");
+    MDG.APP.toast("前方无目标——挥刀落空（不耗回合；按空格待机，敌人便会行动）");
   }
 
   /* 点击画布（鼠标功能全保留） */

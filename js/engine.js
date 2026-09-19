@@ -417,10 +417,17 @@
           u.aggro = true; u.loseT = 0;
           ev(G, { t: "alert", x: u.x, y: u.y, name: u.name, boss: u.boss });
           if (u.boss) log(G, u.name + "（镇守）惊起：" + bossTaunt(G, u.chId));
-        } else if (u.mob && G.r.chance(0.3)) {
-          const [dx, dy] = G.r.pick(Gr.DIRS);
-          const nx = u.x + dx, ny = u.y + dy;
-          if (Gr.walkable(G.map, nx, ny) && !occupied(G, nx, ny) && !isSpecialTile(G, nx, ny)) { u.x = nx; u.y = ny; }
+        } else {
+          /* 闲置巡逻：未惊动者也会踱步——世界不因你静立而冻结 */
+          const idleChance = u.boss ? 0 : (u.mob ? 0.4 : 0.25);
+          if (idleChance > 0 && G.r.chance(idleChance)) {
+            const [dx, dy] = G.r.pick(Gr.DIRS);
+            const nx = u.x + dx, ny = u.y + dy;
+            if (Gr.walkable(G.map, nx, ny) && !occupied(G, nx, ny) && !isSpecialTile(G, nx, ny)) {
+              ev(G, { t: "emove", uid: u.uid, x0: u.x, y0: u.y, x1: nx, y1: ny });
+              u.x = nx; u.y = ny;
+            }
+          }
         }
       } else if (!u.boss) {
         /* 脱离仇恨：久失其踪、或久追而不曾近身，则弃追（镇守不弃——惊起必寻至） */
