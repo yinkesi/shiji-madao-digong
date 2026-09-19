@@ -172,23 +172,54 @@
     setTimeout(() => c.classList.add("hidden"), 2400);
   }
 
-  /* ---- 静态瓦片（进地形层） ---- */
+  /* ---- 静态瓦片（进地形层）——可读性优先：墙近黑带棱，地亮，交界描金 ---- */
   function drawTileStatic(t, G, x, y, tile, campfiresOut) {
     const Gr = GRID();
     const px = x * TILE, py = y * TILE;
     if (tile === Gr.WALL) {
-      t.fillStyle = "#141c2f";
+      /* 墙：近黑实体块 + 顶棱亮边 + 砖缝——一眼即知「不可走」 */
+      t.fillStyle = "#0d1220";
       t.fillRect(px, py, TILE, TILE);
-      t.fillStyle = "rgba(0,0,0,.25)";
-      t.fillRect(px, py + TILE - 5, TILE, 5);
-      t.strokeStyle = "rgba(29,41,65,.6)";
-      t.strokeRect(px + .5, py + .5, TILE - 1, TILE - 1);
+      t.fillStyle = "#3a4e7d";
+      t.fillRect(px, py, TILE, 3);
+      t.fillStyle = "rgba(58,78,125,.4)";
+      t.fillRect(px, py, 3, TILE);
+      t.strokeStyle = "rgba(0,0,0,.45)";
+      t.lineWidth = 1;
+      t.beginPath();
+      t.moveTo(px, py + TILE * 0.5 + .5); t.lineTo(px + TILE, py + TILE * 0.5 + .5);
+      const off = (y % 2) ? TILE * 0.25 : TILE * 0.75;
+      t.moveTo(px + off + .5, py + TILE * 0.5); t.lineTo(px + off + .5, py + TILE);
+      t.stroke();
+      t.fillStyle = "rgba(0,0,0,.3)";
+      t.fillRect(px, py + TILE - 4, TILE, 4);
       return;
     }
-    t.fillStyle = tile === Gr.CORR ? "#0d1424" : "#111a2e";
+    /* 地面：明显亮于墙的可走区（宫室更暖、走廊更冷） */
+    t.fillStyle = tile === Gr.CORR ? "#18243e" : "#202d4a";
     t.fillRect(px, py, TILE, TILE);
-    t.strokeStyle = "rgba(29,41,65,.35)";
-    t.strokeRect(px + .5, py + .5, TILE - 1, TILE - 1);
+    if (((x * 7 + y * 13) % 6) === 0) {
+      t.fillStyle = "rgba(236,230,215,.025)";
+      t.fillRect(px, py, TILE, TILE);
+    }
+    /* 与墙的交界描金边——可走区域的轮廓一眼可辨 */
+    t.fillStyle = "rgba(236,211,154,.16)";
+    if (Gr.at(G.map, x - 1, y) === Gr.WALL) t.fillRect(px, py, 2, TILE);
+    if (Gr.at(G.map, x + 1, y) === Gr.WALL) t.fillRect(px + TILE - 2, py, 2, TILE);
+    if (Gr.at(G.map, x, y - 1) === Gr.WALL) t.fillRect(px, py, TILE, 2);
+    if (Gr.at(G.map, x, y + 1) === Gr.WALL) t.fillRect(px, py + TILE - 2, TILE, 2);
+    if (tile === Gr.TREE) {
+      /* 树：明确的堵路物（此前没有画出来，是字面意义的空气墙） */
+      t.fillStyle = "rgba(0,0,0,.35)";
+      t.beginPath(); t.ellipse(px + TILE / 2, py + TILE - 8, 11, 4.5, 0, 0, 7); t.fill();
+      t.fillStyle = "#3d2c1a";
+      t.fillRect(px + TILE / 2 - 3, py + TILE - 16, 6, 10);
+      t.fillStyle = "#2f5232";
+      t.beginPath(); t.arc(px + TILE / 2, py + TILE / 2 - 4, 13, 0, 7); t.fill();
+      t.fillStyle = "#3c6a40";
+      t.beginPath(); t.arc(px + TILE / 2 - 4, py + TILE / 2 - 7, 8, 0, 7); t.fill();
+      return;
+    }
     if (tile === Gr.CHEST) {
       t.fillStyle = "#6a4f2c"; t.fillRect(px + 7, py + 12, TILE - 14, TILE - 22);
       t.fillStyle = "#c9a45f"; t.fillRect(px + 7, py + 12, TILE - 14, 5);
@@ -276,11 +307,12 @@
     for (let y = 0; y < G.map.h; y++) for (let x = 0; x < G.map.w; x++) {
       if (!G.explored || !G.explored[x + "," + y]) continue;
       const v = Gr.at(G.map, x, y);
-      t.fillStyle = v === Gr.WALL ? "#141c2f" : "#232f4d";
+      t.fillStyle = v === Gr.WALL ? "#0c1322" : "#2e4066";
       t.fillRect(x * s, y * s, s, s);
       if (v === Gr.STAIRS) { t.fillStyle = "#c9a45f"; t.fillRect(x * s, y * s, s, s); }
       if (v === Gr.CAMPFIRE) { t.fillStyle = "#d08a4f"; t.fillRect(x * s, y * s, s, s); }
       if (v === Gr.SHOP) { t.fillStyle = "#7dc99a"; t.fillRect(x * s, y * s, s, s); }
+      if (v === Gr.TREE) { t.fillStyle = "#3c6a40"; t.fillRect(x * s, y * s, s, s); }
     }
     miniDirty = false;
   }
