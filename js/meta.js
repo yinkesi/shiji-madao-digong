@@ -43,6 +43,7 @@
         MDG.Meta.lastRefund = [8, 16, 28].slice(0, lv).reduce((a, b) => a + b, 0);
         merged.wemai = (merged.wemai || 0) + MDG.Meta.lastRefund;
         delete merged.tree.fist;
+        save(merged); /* 立即持久化，防下次 load 重复退款 */
       }
       return merged;
     } catch (e) { return fresh(); }

@@ -147,4 +147,12 @@ function fresh() {
   }
 }
 
+/* 护身：每层开局护盾（newRunState 首层 + 下行逐层累加） */
+{
+  const G = Engine.newRunState({ seed: "guard", runnerId: "yinkesi", diffV: "normal", meta: { guard: 2 } });
+  t.eq(G.player.st.shield, 2, "护身：首层开局盾2");
+  Engine.enterFloor(G, 1);
+  t.eq(G.player.st.shield, 4, "护身：入第二层再+2");
+}
+
 process.exit(t.done());

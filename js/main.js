@@ -189,6 +189,7 @@
     initComics();
     MDG.Input.init();
     const M = MDG.Meta.load();
+    if (MDG.Meta.lastRefund) { toast("「拳不离手」已废除——按已购等级退还文脉 " + MDG.Meta.lastRefund, 3600); MDG.Meta.lastRefund = 0; }
     MDG.APP.setMuted(M.settings.muted);
     $("btn-new").onclick = () => {
       game.meta = MDG.Meta.load();

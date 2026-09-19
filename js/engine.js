@@ -52,7 +52,7 @@
     if (!runner || !runner.runner) throw new Error("bad runner: " + opts.runnerId);
     const G = {
       v: 1, seed, diff, runnerId: runner.id, floorIdx: 0, round: 1,
-      money: 12 + (meta.purse || 0) * 10,
+      money: 12 + (meta.purse || 0) * 12,
       learned: {},          // chId -> true（本轮已录技）
       learnedSkills: [],    // 已录主动技 id
       relics: [], items: [{ id: "fantuan", n: 2 }],
@@ -70,7 +70,7 @@
     p.dmg = runner.dmg || 2;
     addSkill(p, runner.skill);                 // 血祭（或该将本技）打底
     if (runner.id === "yinkesi" && (meta.blood || 0) > 0) p.skills[0].blood += meta.blood;
-    if (meta.guard) p.st.shield += meta.guard;
+    G._metaBonuses = meta; /* enterFloor 的每层加成从这里读 */
     G.player = p;
     enterFloor(G, 0);
     return G;
@@ -120,6 +120,8 @@
     /* 史官落点：出生宫室正中 */
     G.player.x = G.map.spawn[0]; G.player.y = G.map.spawn[1];
     if ((G.relics || []).includes("shield3")) G.player.st.shield += 3;
+    /* 修炼「护身」：每层开局护盾（细水长流） */
+    if (G._metaBonuses && G._metaBonuses.guard) G.player.st.shield += G._metaBonuses.guard;
     /* 注意：不清 G.ev——下行时 enterFloor 在 act() 中途被调，事件流必须保住 */
     log(G, "入第" + CN_NUM[floorIdx] + "层 · " + def.name);
     if (def.rule) log(G, "〔" + def.rule + "〕" + def.ruleDesc);
@@ -790,7 +792,6 @@
     /* 下行喘息：回25%血 */
     const p = G.player;
     heal(G, p, Math.max(2, Math.round(p.maxHp * 0.25)));
-    if (G.relics.includes("shield3")) p.st.shield += 3;
   }
 
   /* ---------------- 用技 ---------------- */

@@ -771,13 +771,16 @@ button { font-family: inherit; }
   };
 
   /* ---------------- 修炼树（文脉） ---------------- */
+  /* 数值基调（2026-09-19 重排）：
+     满修共 149 文脉（约 5-8 轮）；每条线边际价值对齐，
+     体魄封顶 +8 血（不再一枝独秀），护身改「每层护盾」细水长流。 */
   const META_TREE = [
-    { id: "body", name: "体魄", max: 3, cost: [8, 16, 28], desc: "生命上限+4/级。（跑操不落）" },
-    { id: "purse", name: "盘缠", max: 2, cost: [6, 12], desc: "开局零花钱+10/级。（压岁钱藏着）" },
+    { id: "body", name: "体魄", max: 2, cost: [10, 22], desc: "生命上限+4/级。（跑操不落）" },
+    { id: "purse", name: "盘缠", max: 2, cost: [6, 12], desc: "开局零花钱+12/级。（压岁钱藏着）" },
     { id: "appetite", name: "饭量", max: 2, cost: [6, 12], desc: "食物回复+2/级。（食堂阿姨手不抖）" },
     { id: "hearth", name: "灶火", max: 1, cost: [10], desc: "灶间歇息另获3点护盾。（灶膛余温）" },
     { id: "blood", name: "血性", max: 1, cost: [15], desc: "血祭翻倍次数+1。（血祭血祭血血祭）" },
-    { id: "guard", name: "护身", max: 1, cost: [10], desc: "入宫自带2点护盾。（班主任的偏爱·平替）" },
+    { id: "guard", name: "护身", max: 2, cost: [8, 18], desc: "每层开局护盾+1/级。（贴身小棉袄）" },
     { id: "royalty", name: "稿费", max: 2, cost: [10, 20], desc: "文脉获取+10%/级。（立言之利）" }
   ];
 
@@ -1045,7 +1048,7 @@ button { font-family: inherit; }
     if (!runner || !runner.runner) throw new Error("bad runner: " + opts.runnerId);
     const G = {
       v: 1, seed, diff, runnerId: runner.id, floorIdx: 0, round: 1,
-      money: 12 + (meta.purse || 0) * 10,
+      money: 12 + (meta.purse || 0) * 12,
       learned: {},          // chId -> true（本轮已录技）
       learnedSkills: [],    // 已录主动技 id
       relics: [], items: [{ id: "fantuan", n: 2 }],
@@ -1063,7 +1066,7 @@ button { font-family: inherit; }
     p.dmg = runner.dmg || 2;
     addSkill(p, runner.skill);                 // 血祭（或该将本技）打底
     if (runner.id === "yinkesi" && (meta.blood || 0) > 0) p.skills[0].blood += meta.blood;
-    if (meta.guard) p.st.shield += meta.guard;
+    G._metaBonuses = meta; /* enterFloor 的每层加成从这里读 */
     G.player = p;
     enterFloor(G, 0);
     return G;
@@ -1113,6 +1116,8 @@ button { font-family: inherit; }
     /* 史官落点：出生宫室正中 */
     G.player.x = G.map.spawn[0]; G.player.y = G.map.spawn[1];
     if ((G.relics || []).includes("shield3")) G.player.st.shield += 3;
+    /* 修炼「护身」：每层开局护盾（细水长流） */
+    if (G._metaBonuses && G._metaBonuses.guard) G.player.st.shield += G._metaBonuses.guard;
     /* 注意：不清 G.ev——下行时 enterFloor 在 act() 中途被调，事件流必须保住 */
     log(G, "入第" + CN_NUM[floorIdx] + "层 · " + def.name);
     if (def.rule) log(G, "〔" + def.rule + "〕" + def.ruleDesc);
@@ -1783,7 +1788,6 @@ button { font-family: inherit; }
     /* 下行喘息：回25%血 */
     const p = G.player;
     heal(G, p, Math.max(2, Math.round(p.maxHp * 0.25)));
-    if (G.relics.includes("shield3")) p.st.shield += 3;
   }
 
   /* ---------------- 用技 ---------------- */
@@ -1951,6 +1955,7 @@ button { font-family: inherit; }
         MDG.Meta.lastRefund = [8, 16, 28].slice(0, lv).reduce((a, b) => a + b, 0);
         merged.wemai = (merged.wemai || 0) + MDG.Meta.lastRefund;
         delete merged.tree.fist;
+        save(merged); /* 立即持久化，防下次 load 重复退款 */
       }
       return merged;
     } catch (e) { return fresh(); }
@@ -3973,6 +3978,7 @@ button { font-family: inherit; }
     initComics();
     MDG.Input.init();
     const M = MDG.Meta.load();
+    if (MDG.Meta.lastRefund) { toast("「拳不离手」已废除——按已购等级退还文脉 " + MDG.Meta.lastRefund, 3600); MDG.Meta.lastRefund = 0; }
     MDG.APP.setMuted(M.settings.muted);
     $("btn-new").onclick = () => {
       game.meta = MDG.Meta.load();

@@ -44,9 +44,26 @@ const t = makeT("run");
   M.wemai = 20;
   t.ok(Meta.buy(M, "body"), "买入体魄");
   t.eq(M.tree.body, 1, "体魄一级");
-  t.eq(M.wemai, 12, "扣费8");
-  t.ok(Meta.nextCost(M, "body") === 16, "下一级价16");
+  t.eq(M.wemai, 10, "扣费10");
+  t.ok(Meta.nextCost(M, "body") === 22, "下一级价22");
   t.ok(!Meta.buy(M, "body"), "钱不够拒买");
+  /* 树健壮性：价目与等级匹配、逐级递增、总预算有界 */
+  let total = 0;
+  for (const n of DATA.META_TREE) {
+    t.ok(n.max >= 1 && n.cost.length === n.max, "节点 " + n.id + " 价目与等级匹配");
+    for (let i = 1; i < n.cost.length; i++) t.ok(n.cost[i] > n.cost[i - 1], n.id + " 价目逐级递增");
+    total += n.cost.reduce((a, b) => a + b, 0);
+  }
+  t.ok(total <= 160, "满修总预算有界（" + total + "≤160）");
+  /* 旧档迁移：拳不离手按级退款 */
+  const M3 = Meta.fresh();
+  M3.tree.fist = 2; M3.wemai = 0;
+  Meta.save(M3);
+  const M4 = Meta.load();
+  t.eq(M4.wemai, 24, "旧档退款24（8+16）");
+  t.ok(!("fist" in M4.tree), "拳不离手已从档中移除");
+  const M5 = Meta.load();
+  t.eq(M5.wemai, 24, "二次 load 不重复退款");
 }
 
 /* 难度缩放：同种子下，噩梦杂兵血高于简单 */
