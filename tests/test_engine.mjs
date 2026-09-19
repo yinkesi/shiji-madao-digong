@@ -13,7 +13,7 @@ function fresh() {
 {
   const G = fresh();
   t.ok(G.player && G.player.chId === "yinkesi", "开局有史官");
-  t.eq(G.player.hp, 18, "史官基准血18");
+  t.eq(G.player.hp, 20, "史官基准血20");
   t.eq(G.player.x, G.map.spawn[0], "史官落在出生点");
   t.ok(G.enemies.some(u => u.boss && u.chId === "wanzhen"), "一层镇守万震在场");
   t.ok(!Engine.stairsOpenNow(G), "镇守未除，梯不开");

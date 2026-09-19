@@ -203,4 +203,17 @@ function fresh() {
 }
 
 Engine.setTeleChance(1); // 复原
+
+/* 平衡：层深递增（越深越硬）+ 血性全将生效 */
+{
+  const g1 = Engine.newRunState({ seed: "depth", diffV: "normal", meta: {} });
+  const g9 = Engine.newRunState({ seed: "depth", diffV: "normal", meta: {} });
+  Engine.enterFloor(g9, 8);
+  const m1 = g1.enemies.find(u => u.mob);
+  const m9 = g9.enemies.find(u => u.mob);
+  t.ok(m9.hp > m1.hp, "第9层杂兵厚于第1层（" + m1.hp + "→" + m9.hp + "）");
+  const gw = Engine.newRunState({ seed: "wb", runnerId: "wonder", diffV: "normal", meta: { blood: 1 } });
+  const xj = gw.player.skills.find(s => s.id === "xueji");
+  t.eq(xj.blood, 4, "血性修炼对 wonder 血祭同样生效（3+1）");
+}
 process.exit(t.done());

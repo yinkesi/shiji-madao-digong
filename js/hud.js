@@ -97,7 +97,7 @@
     const HOT = ["U", "I", "O", "P"];
     G.player.skills.forEach((sk, i) => {
       const d = el("div", "skill" + (MDG.UI.armed.get() === i ? " armed" : ""));
-      const hot = HOT[i] || (i + 1);
+      const hot = i < 4 ? HOT[i] : (i <= 8 ? String(i + 1) : "·"); /* 4-8 走数字键，更多靠鼠标 */
       d.innerHTML = `<span class="key">${hot}</span><b>${sk.name}</b><i>${sk.kind === "self" ? "自身" : sk.kind === "global" ? "全场" : "距" + (sk.range || 1)}</i>`;
       if (sk.cdLeft > 0) {
         const cd = el("div", "cd", String(sk.cdLeft));

@@ -162,7 +162,8 @@ button { font-family: inherit; }
 }
 #skillbar {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; align-items: flex-end;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; align-items: flex-end;
+  max-width: 92vw;
 }
 .skill {
   position: relative; width: 84px; height: 58px; background: rgba(12,18,32,.9); border: 1px solid var(--line);
@@ -551,7 +552,7 @@ button { font-family: inherit; }
   const CHARS = {
     yinkesi: {
       id: "yinkesi", name: "音克思", hao: "史官", glyph: "史", color: "#c9a45f",
-      hp: 18, dmg: 2, runner: true,
+      hp: 20, dmg: 2, runner: true,
       passive: { name: "录技", desc: "首次斩杀有名之角色，录其技入刀谱（仅史官可得）。" },
       skill: { id: "xueji", name: "血祭", kind: "self", cd: 5,
         desc: "损当前半血（至少留1），接下来两次伤害翻倍。", blood: 2 },
@@ -728,7 +729,7 @@ button { font-family: inherit; }
   const FLOORS = [
     { n: 1, name: "跑道之下", rule: null, ruleDesc: "", boss: "wanzhen", elites: [], mobs: 3,
       intro: "梦从操场开始。白线还在，万震坐在跑道边等一道题——他说过，题来了才抬头。想往下走，先接他一刀。" },
-    { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 4,
+    { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 3,
       intro: "走廊记得那三个人。异能者在梦里也不会让路，只会合唱——先分开他们，再面见大哥。" },
     { n: 3, name: "三国刀廊", rule: "chaos", ruleDesc: "党争：敌人二成机率打错人——同门相争，各怀鬼胎", boss: "luhao", elites: ["xiaochuan"], mobs: 4,
       intro: "教室的课桌长进了土里，两把刀还插着。鲁豪在等一场没打完的架——记忆里的他，说过『急击勿失』。" },
@@ -750,20 +751,21 @@ button { font-family: inherit; }
   const ITEMS = {
     fantuan: { id: "fantuan", name: "饭团", price: 6, kind: "heal", val: 5, desc: "回复5血。（食堂之魂）" },
     mantou: { id: "mantou", name: "大馒头", price: 12, kind: "heal", val: 10, desc: "回复10血。（实而不华）" },
+    jitui: { id: "jitui", name: "大鸡腿", price: 22, kind: "heal", val: 16, desc: "回复16血。（小卖部镇店之宝）" },
     hugoushuang: { id: "hugoushuang", name: "护手霜", price: 10, kind: "shield", val: 3, desc: "获得3点护盾。（之韫所赠）" },
     yumi: { id: "yumi", name: "玉米", price: 14, kind: "empower", val: 1, desc: "下次伤害翻倍。（幻想玉米为刃）" },
     shuihu: { id: "shuihu", name: "水壶", price: 10, kind: "cdclear", desc: "立即清空所有技能冷却。（嗜水如命）" },
     heibang: { id: "heibang", name: "黑棒", price: 15, kind: "buff", val: 12, desc: "十二回合内刀击+1。（不盈尺而威力无双）" },
     tuoluo: { id: "tuoluo", name: "陀螺·三溴化氮", price: 16, kind: "throw", range: 3, dmg: 2, stun: 1, desc: "掷出：距三内一敌受2伤并晕一回合。（鲜有败绩）" }
   };
-  const SHOP_STOCK = ["fantuan", "mantou", "hugoushuang", "yumi", "shuihu", "heibang", "tuoluo"];
+  const SHOP_STOCK = ["fantuan", "mantou", "jitui", "hugoushuang", "yumi", "shuihu", "heibang", "tuoluo"];
 
   /* ---------------- 刀卡（遗物，本轮有效） ---------------- */
   const RELICS = {
     firststrike: { id: "firststrike", name: "先手刀", desc: "每回合首次刀击+1。（早读查得严，唯快不破）" },
     shield3: { id: "shield3", name: "班主任的偏爱", desc: "每层开局获得3点护盾。（含笑素善大哥）" },
     bloodfree: { id: "bloodfree", name: "以道代血", desc: "血祭不再损血，只耗一息。（道之所在，血不轻洒）" },
-    killheal: { id: "killheal", name: "庆功之宴", desc: "击破回复由2升为4。（大胜而归，理当加餐）" },
+    killheal: { id: "killheal", name: "庆功之宴", desc: "击破回复由3升为5。（大胜而归，理当加餐）" },
     cleave: { id: "cleave", name: "刀扫一片", desc: "刀击同时波及相邻的另一名敌人。（马刀本是横扫之术）" },
     reach: { id: "reach", name: "长杆马刀", desc: "刀击可及两格。（加长一寸，强出一分）" },
     nightwalk: { id: "nightwalk", name: "锦绣夜行", desc: "每层首次刀击+2。（恋爱而不让人知）" },
@@ -1070,7 +1072,8 @@ button { font-family: inherit; }
       p.skills.unshift({ id: "xueji", name: "血祭", kind: "self", cd: 5, blood: 3, cdLeft: 0,
         desc: "损当前半血（至少留1），接下来三次伤害翻倍。（马刀之神亲传）" });
     }
-    if (runner.id === "yinkesi" && (meta.blood || 0) > 0) p.skills[0].blood += meta.blood;
+    if ((meta.blood || 0) > 0 && p.skills[0] && p.skills[0].id === "xueji") p.skills[0].blood += meta.blood; /* 血性修炼：凡血祭皆适用 */
+
     G._metaBonuses = meta; /* enterFloor 的每层加成从这里读 */
     G.player = p;
     enterFloor(G, 0);
@@ -1088,7 +1091,8 @@ button { font-family: inherit; }
     G.map = built.map;
     const places = built.places;
     const d = D.DIFF_BY_V[G.diff];
-    const scaleHp = (v) => Math.max(1, Math.round(v * d.eHp));
+    const depth = 1 + 0.05 * floorIdx; /* 层深递增：越深越硬（第9层+40%） */
+    const scaleHp = (v) => Math.max(1, Math.round(v * d.eHp * depth));
     const scaleDmg = (v) => Math.max(1, v + d.eDmg);
     G.enemies = [];
     if (places.boss) {
@@ -1237,7 +1241,8 @@ button { font-family: inherit; }
     /* 卧薪尝胆（被打者积怨） */
     if (hasP(def, "grudgeStack")) def.st.grudge = Math.min(def.passive.grudgeCap || 2, def.st.grudge + def.passive.grudgeStack);
     /* 附加效果 */
-    if (opt.stun && !hasP(def, "immuneStun")) def.st.stun = Math.max(def.st.stun, opt.stun);
+    /* 反控制链：已晕者不可再被晕（晕完必须给一回合行动权） */
+    if (opt.stun && !hasP(def, "immuneStun") && def.st.stun === 0) def.st.stun = opt.stun;
     if (opt.seal) def.st.disarm = Math.max(def.st.disarm, opt.seal);
     if (opt.poison) def.st.poison = Math.max(def.st.poison, opt.poison);
     if (opt.heal && !att.dead) heal(G, att, opt.heal);
@@ -1286,8 +1291,8 @@ button { font-family: inherit; }
     if (def.side === "p") { playerDown(G); return; }
     if (att && att.side === "p") {
       G.kills++;
-      /* 击破回血：卷八古法，击破一名敌人回复2血（「庆功之宴」升为4） */
-      heal(G, att, G.relics.includes("killheal") ? 4 : 2);
+      /* 击破回血：卷八古法，击破一名敌人回复3血（「庆功之宴」升为5） */
+      heal(G, att, G.relics.includes("killheal") ? 5 : 3);
       /* 战利品：杂兵2-3钱、精英6-9钱 */
       if (def.mob) { const m = 2 + G.r.int(0, 1); G.money += m; ev(G, { t: "coin", x: def.x, y: def.y, val: m }); }
       else if (def.elite) { const m = 6 + G.r.int(0, 3); G.money += m; ev(G, { t: "coin", x: def.x, y: def.y, val: m }); }
@@ -1495,9 +1500,9 @@ button { font-family: inherit; }
     }
   }
   function isSpecialTile(G, x, y) {
-    /* 史料与楼梯格可通行（玩家走过拾/踏上另行交互）；箱/灶/商摊对敌是障碍 */
+    /* 敌人绕行：箱与商摊是实体障碍；灶间可通行（敌人不会用灶，但绝不能被它卡死成软锁） */
     const Gr = G3(); const t = Gr.at(G.map, x, y);
-    return t === Gr.CHEST || t === Gr.SHOP || t === Gr.CAMPFIRE;
+    return t === Gr.CHEST || t === Gr.SHOP;
   }
   function bossTaunt(G, chId) {
     const pool = {
@@ -1865,9 +1870,9 @@ button { font-family: inherit; }
     G.firstClears.push(G.floorIdx); // 记录（首次赏由 run 层判重）
     ev(G, { t: "descend" });
     enterFloor(G, G.floorIdx + 1);
-    /* 下行喘息：回25%血 */
+    /* 下行喘息：回35%血 */
     const p = G.player;
-    heal(G, p, Math.max(2, Math.round(p.maxHp * 0.25)));
+    heal(G, p, Math.max(3, Math.round(p.maxHp * 0.35)));
   }
 
   /* ---------------- 用技 ---------------- */
@@ -3215,7 +3220,7 @@ button { font-family: inherit; }
     const HOT = ["U", "I", "O", "P"];
     G.player.skills.forEach((sk, i) => {
       const d = el("div", "skill" + (MDG.UI.armed.get() === i ? " armed" : ""));
-      const hot = HOT[i] || (i + 1);
+      const hot = i < 4 ? HOT[i] : (i <= 8 ? String(i + 1) : "·"); /* 4-8 走数字键，更多靠鼠标 */
       d.innerHTML = `<span class="key">${hot}</span><b>${sk.name}</b><i>${sk.kind === "self" ? "自身" : sk.kind === "global" ? "全场" : "距" + (sk.range || 1)}</i>`;
       if (sk.cdLeft > 0) {
         const cd = el("div", "cd", String(sk.cdLeft));

@@ -155,7 +155,8 @@ button { font-family: inherit; }
 }
 #skillbar {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; align-items: flex-end;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; align-items: flex-end;
+  max-width: 92vw;
 }
 .skill {
   position: relative; width: 84px; height: 58px; background: rgba(12,18,32,.9); border: 1px solid var(--line);

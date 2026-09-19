@@ -17,7 +17,7 @@
   const CHARS = {
     yinkesi: {
       id: "yinkesi", name: "音克思", hao: "史官", glyph: "史", color: "#c9a45f",
-      hp: 18, dmg: 2, runner: true,
+      hp: 20, dmg: 2, runner: true,
       passive: { name: "录技", desc: "首次斩杀有名之角色，录其技入刀谱（仅史官可得）。" },
       skill: { id: "xueji", name: "血祭", kind: "self", cd: 5,
         desc: "损当前半血（至少留1），接下来两次伤害翻倍。", blood: 2 },
@@ -194,7 +194,7 @@
   const FLOORS = [
     { n: 1, name: "跑道之下", rule: null, ruleDesc: "", boss: "wanzhen", elites: [], mobs: 3,
       intro: "梦从操场开始。白线还在，万震坐在跑道边等一道题——他说过，题来了才抬头。想往下走，先接他一刀。" },
-    { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 4,
+    { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 3,
       intro: "走廊记得那三个人。异能者在梦里也不会让路，只会合唱——先分开他们，再面见大哥。" },
     { n: 3, name: "三国刀廊", rule: "chaos", ruleDesc: "党争：敌人二成机率打错人——同门相争，各怀鬼胎", boss: "luhao", elites: ["xiaochuan"], mobs: 4,
       intro: "教室的课桌长进了土里，两把刀还插着。鲁豪在等一场没打完的架——记忆里的他，说过『急击勿失』。" },
@@ -216,20 +216,21 @@
   const ITEMS = {
     fantuan: { id: "fantuan", name: "饭团", price: 6, kind: "heal", val: 5, desc: "回复5血。（食堂之魂）" },
     mantou: { id: "mantou", name: "大馒头", price: 12, kind: "heal", val: 10, desc: "回复10血。（实而不华）" },
+    jitui: { id: "jitui", name: "大鸡腿", price: 22, kind: "heal", val: 16, desc: "回复16血。（小卖部镇店之宝）" },
     hugoushuang: { id: "hugoushuang", name: "护手霜", price: 10, kind: "shield", val: 3, desc: "获得3点护盾。（之韫所赠）" },
     yumi: { id: "yumi", name: "玉米", price: 14, kind: "empower", val: 1, desc: "下次伤害翻倍。（幻想玉米为刃）" },
     shuihu: { id: "shuihu", name: "水壶", price: 10, kind: "cdclear", desc: "立即清空所有技能冷却。（嗜水如命）" },
     heibang: { id: "heibang", name: "黑棒", price: 15, kind: "buff", val: 12, desc: "十二回合内刀击+1。（不盈尺而威力无双）" },
     tuoluo: { id: "tuoluo", name: "陀螺·三溴化氮", price: 16, kind: "throw", range: 3, dmg: 2, stun: 1, desc: "掷出：距三内一敌受2伤并晕一回合。（鲜有败绩）" }
   };
-  const SHOP_STOCK = ["fantuan", "mantou", "hugoushuang", "yumi", "shuihu", "heibang", "tuoluo"];
+  const SHOP_STOCK = ["fantuan", "mantou", "jitui", "hugoushuang", "yumi", "shuihu", "heibang", "tuoluo"];
 
   /* ---------------- 刀卡（遗物，本轮有效） ---------------- */
   const RELICS = {
     firststrike: { id: "firststrike", name: "先手刀", desc: "每回合首次刀击+1。（早读查得严，唯快不破）" },
     shield3: { id: "shield3", name: "班主任的偏爱", desc: "每层开局获得3点护盾。（含笑素善大哥）" },
     bloodfree: { id: "bloodfree", name: "以道代血", desc: "血祭不再损血，只耗一息。（道之所在，血不轻洒）" },
-    killheal: { id: "killheal", name: "庆功之宴", desc: "击破回复由2升为4。（大胜而归，理当加餐）" },
+    killheal: { id: "killheal", name: "庆功之宴", desc: "击破回复由3升为5。（大胜而归，理当加餐）" },
     cleave: { id: "cleave", name: "刀扫一片", desc: "刀击同时波及相邻的另一名敌人。（马刀本是横扫之术）" },
     reach: { id: "reach", name: "长杆马刀", desc: "刀击可及两格。（加长一寸，强出一分）" },
     nightwalk: { id: "nightwalk", name: "锦绣夜行", desc: "每层首次刀击+2。（恋爱而不让人知）" },

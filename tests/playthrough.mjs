@@ -24,6 +24,10 @@ await page.waitForTimeout(400);
 await page.click("#btn-new");
 try { await page.waitForSelector("#prologue-screen:not(.hidden)", { timeout: 1500 }); await page.click("#pro-skip"); } catch (e) {}
 await page.waitForSelector("#setup-screen:not(.hidden)");
+await page.evaluate(() => {
+  const forced = new URLSearchParams(location.search).get("seed");
+  if (forced) { const orig = MDG.Run.newRun.bind(MDG.Run); MDG.Run.newRun = (o) => orig(Object.assign({ seed: forced }, o)); }
+});
 await page.click("#btn-start");
 await page.waitForSelector("#game-screen:not(.hidden)");
 await page.waitForTimeout(500);
@@ -39,6 +43,7 @@ await page.evaluate(() => {
       (!!MD.Engine.unitAt(G, x, y) && !(x === tx && y === ty)) ||
       [MD.Grid.CHEST, MD.Grid.SHOP, MD.Grid.TRAP].includes(MD.Grid.at(G.map, x, y)));
     if (!s) s = MD.Grid.stepToward(G.map, p.x, p.y, tx, ty, (x, y) => !!MD.Engine.unitAt(G, x, y)); // 无路可绕则硬走（宁可踩陷阱）
+    if (!s) s = MD.Grid.stepToward(G.map, p.x, p.y, tx, ty, null); // 最后兜底：撞开挡路者（攻击/开箱）
     if (s) { MD.Input.act({ t: "move", dx: s[0] - p.x, dy: s[1] - p.y }); return true; }
     MD.Input.act({ t: "wait", auto: true });
     return false;
@@ -46,17 +51,53 @@ await page.evaluate(() => {
   window.__chunk = function () {
     const notes = [];
     let turns = 0;
+    let stuckN = 0, stuckPos = null, stuckInfo = null;
+    const trace = [];
+    const rolling = [];
+    let diag = null;
     while (turns < 300) {
       const G = MD.Main.game.G;
       if (!G || G.over || MD.Main.game.overShown) break;
       const p = G.player;
+      const skey = p.x + "," + p.y;
+      if (skey === stuckPos) {
+        stuckN++;
+        if (stuckN === 60 && !stuckInfo) {
+          const Gr = MD.Grid;
+          stuckInfo = {
+            pos: skey, hp: p.hp, emp: p.st.emp, disarm: p.st.disarm, camp: G.campUsed,
+            adj: MD.Grid.DIRS.map(([dx, dy]) => ({ d: dx + "," + dy, t: Gr.at(G.map, p.x + dx, p.y + dy), u: !!MD.Engine.unitAt(G, p.x + dx, p.y + dy) })),
+            enemies: MD.Engine.livingEnemies(G).filter(u => u.chId !== "tree").map(u => ({ n: u.name, a: u.aggro, d: manh(u, p), t: Gr.at(G.map, u.x, u.y) })).slice(0, 8)
+          };
+        }
+        if (stuckN > 60) {
+          const opts = MD.Grid.DIRS.filter(([dx, dy]) => {
+            const nx = p.x + dx, ny = p.y + dy;
+            if (!MD.Grid.inB(G.map, nx, ny)) return false;
+            const tt = MD.Grid.at(G.map, nx, ny);
+            if (tt === MD.Grid.WALL || tt === MD.Grid.TREE) return false;
+            const u = MD.Engine.unitAt(G, nx, ny);
+            if (u) return u.side === "e";
+            return true;
+          });
+          if (opts.length) { const [dx, dy] = opts[turns % opts.length]; MD.Input.act({ t: "move", dx, dy }); turns++; continue; }
+        }
+      } else { stuckN = 0; stuckPos = skey; }
+      if (turns === 160) diag = {
+        enemies: MD.Engine.livingEnemies(G).filter(u => u.chId !== "tree").map(u => ({ n: u.name, a: u.aggro, d: manh(u, p), p: u.x + "," + u.y, t: MD.Grid.at(G.map, u.x, u.y), saw: u.saw, dead: u.dead })),
+        camp: G.campUsed, money: G.money, food: G.items.filter(i => i.id === "fantuan" || i.id === "mantou").length,
+        shop: (() => { let s = null; for (let y = 0; y < G.map.h && !s; y++) for (let x = 0; x < G.map.w && !s; x++) if (MD.Grid.at(G.map, x, y) === MD.Grid.SHOP) s = x + "," + y; return s; })(),
+        stairsOpen: MD.Engine.stairsOpenNow(G)
+      };
       turns++;
       const foes = window.__living(G);
       const hunters = foes.filter(u => u.aggro).sort((a, b) => manh(a, p) - manh(b, p));
       const foodN = () => G.items.filter(i => i.id === "fantuan" || i.id === "mantou").reduce((a, b) => a + b.n, 0);
+      if (turns % 25 === 0) trace.push("t" + turns + " hp" + p.hp + " 敌" + foes.length + "(追" + hunters.length + ") 食" + foodN() + " 灶" + G.campUsed + " 钱" + G.money + " emp" + p.st.emp);
+      for (const e of G.ev) if (e.t === "log") rolling.push(e.text);
       /* 面板（商店）处理：买馒头到 3 个 */
       if (MD.HUD.panelOpen()) {
-        const row = [...document.querySelectorAll("#panel-body .row")].find(r => r.textContent.includes("馒头"));
+        const row = [...document.querySelectorAll("#panel-body .row")].find(r => r.textContent.includes("馒头") || r.textContent.includes("鸡腿"));
         const btn = row && row.querySelector("button");
         if (btn && !btn.disabled && foodN() < 3 && G.money >= 12) { btn.click(); continue; }
         MD.HUD.closePanel(); continue;
@@ -65,8 +106,8 @@ await page.evaluate(() => {
       if (MD.Engine.stairsOpenNow(G) && foes.length === 0) {
         const st = G.map.stairs;
         const cf0 = (() => { for (let y = 0; y < G.map.h; y++) for (let x = 0; x < G.map.w; x++) if (MD.Grid.at(G.map, x, y) === MD.Grid.CAMPFIRE && !G.campUsed) return [x, y]; return null; })();
-        if (p.hp < p.maxHp * 0.97 && cf0) { /* 落到灶间分支歇满再下 */ }
-        else if (p.hp < p.maxHp * 0.5 && foodN() > 0) { const ii = G.items.findIndex(i => i.id === "fantuan" || i.id === "mantou"); MD.Input.act({ t: "item", ii }); continue; }
+        if (p.hp < p.maxHp * 0.55 && cf0) { /* 落到灶间分支歇满再下 */ }
+        else if (p.hp < p.maxHp * 0.55 && foodN() > 0) { const ii = G.items.findIndex(i => i.id === "fantuan" || i.id === "mantou"); MD.Input.act({ t: "item", ii }); continue; }
         else {
           if (manh(st, p) === 1) { MD.Input.act({ t: "move", dx: st[0] - p.x, dy: st[1] - p.y }); continue; }
           window.__walkTo(G, st[0], st[1]); continue;
@@ -86,11 +127,28 @@ await page.evaluate(() => {
       const wantBlood = p.st.emp === 0 && p.skills[0].cdLeft === 0 && (bigNear || teleAdj) &&
         (G.relics.includes("bloodfree") || p.hp >= p.maxHp * 0.62);
       if (wantBlood && (teleAdj || (bigNear && manh(bigNear, p) <= 4))) { MD.Input.act({ t: "skill", si: 0 }); continue; }
-      /* 4. 贴身：优先弹反，否则打最薄；被两敌以上围且非弹反窗口 → 先拉开（分其阵） */
+      /* 4. 贴身：优先弹反，否则打最薄；被两名【追兵】围且非弹反窗口 → 先拉开（分其阵）
+            （睡眠者不是威胁——只数 aggro，否则会对无害的路人无限乒乓） */
       const adjFoes = foes.filter(u => manh(u, p) === 1);
+      const adjHunters = adjFoes.filter(u => u.aggro);
       if (adjFoes.length) {
         const tgt = teleAdj || adjFoes.sort((a, b) => a.hp - b.hp)[0];
-        if (!teleAdj && adjFoes.length >= 2 && p.hp <= p.maxHp * 0.72) {
+        /* 弹反节奏：对镇守无红框时不满 65% 血 → 脱离等窗口（硬换血必输） */
+        const effDmg = tgt.dmg * ((tgt.passive && tgt.passive.knifeMul) || 1);
+        if (!teleAdj && tgt.boss && effDmg >= 4 && p.hp <= p.maxHp * 0.65) {
+          let best = null, bs = -1e9;
+          for (const [dx, dy] of MD.Grid.DIRS) {
+            const nx = p.x + dx, ny = p.y + dy;
+            if (!MD.Grid.inB(G.map, nx, ny) || !MD.Grid.walkable(G.map, nx, ny) || MD.Engine.unitAt(G, nx, ny)) continue;
+            const tv = MD.Grid.at(G.map, nx, ny);
+            if ([MD.Grid.CHEST, MD.Grid.SHOP, MD.Grid.TRAP].includes(tv)) continue;
+            let sc = manh(tgt, { x: nx, y: ny }) * 10;
+            if (!MD.Grid.los(G.map, tgt.x, tgt.y, nx, ny)) sc += 40;
+            if (sc > bs) { bs = sc; best = [dx, dy]; }
+          }
+          if (best) { MD.Input.act({ t: "move", dx: best[0], dy: best[1] }); continue; }
+        }
+        if (!teleAdj && adjHunters.length >= 2 && p.hp <= p.maxHp * 0.72) {
           let best = null, bs = -1e9;
           for (const [dx, dy] of MD.Grid.DIRS) {
             const nx = p.x + dx, ny = p.y + dy;
@@ -122,23 +180,26 @@ await page.evaluate(() => {
         }
       }
       if (casted) continue;
-      /* 6. 灶间：血不满且追兵远（或无）→ 歇（残血也敢回家） */
+      /* 6. 灶间：受伤就风筝回家（引敌长途跋涉，甩不掉就路上解决） */
       let cf = null;
       for (let y = 0; y < G.map.h && !cf; y++) for (let x = 0; x < G.map.w && !cf; x++)
         if (MD.Grid.at(G.map, x, y) === MD.Grid.CAMPFIRE && !G.campUsed) cf = [x, y];
-      if (cf && p.hp < p.maxHp * 0.9 && (!hunters.length || hunters.every(h => manh(h, p) >= 6))) {
+      const onlyBossLeft = foes.length > 0 && foes.every(u => u.boss);
+      if (cf && (onlyBossLeft ? p.hp < p.maxHp * 0.97 : p.hp < p.maxHp * 0.45) && (!hunters.length || hunters.every(h => manh(h, p) >= 6))) {
         if (manh(cf, p) === 1) { MD.Input.act({ t: "move", dx: cf[0] - p.x, dy: cf[1] - p.y }); continue; }
         window.__walkTo(G, cf[0], cf[1]); continue;
       }
       /* 7. 残血拉扯 */
-      if (p.hp <= p.maxHp * 0.35 && hunters.length && manh(hunters[0], p) <= 4) {
+      if (p.hp <= p.maxHp * 0.35 && hunters.length && manh(hunters[0], p) <= 5) {
         let best = null, bs = -1e9;
         for (const [dx, dy] of MD.Grid.DIRS) {
           const nx = p.x + dx, ny = p.y + dy;
           if (!MD.Grid.inB(G.map, nx, ny) || !MD.Grid.walkable(G.map, nx, ny) || MD.Engine.unitAt(G, nx, ny)) continue;
           const tv = MD.Grid.at(G.map, nx, ny);
           if ([MD.Grid.CHEST, MD.Grid.SHOP, MD.Grid.TRAP].includes(tv)) continue;
+          const ref = hunters[0] || adjHunters[0] || tgt;
           let sc = Math.min(...foes.map(u => manh(u, { x: nx, y: ny }))) * 10;
+          if (ref && !MD.Grid.los(G.map, ref.x, ref.y, nx, ny)) sc += 40; /* 断视线→甩尾 */
           if (G.floorDef.rule === "cans" && foes.some(u => u.x === nx || u.y === ny)) sc -= 15;
           if (sc > bs) { bs = sc; best = [dx, dy]; }
         }
@@ -166,11 +227,11 @@ await page.evaluate(() => {
       /* 10. 目标：镇守永远最后打；打镇守前残血先回灶间（风筝） */
       const nonBoss = foes.filter(u => !u.boss);
       const bosses = foes.filter(u => u.boss);
-      if (!nonBoss.length && bosses.length) {
+      if (bosses.length) {
         let cf2 = null;
         for (let y = 0; y < G.map.h && !cf2; y++) for (let x = 0; x < G.map.w && !cf2; x++)
           if (MD.Grid.at(G.map, x, y) === MD.Grid.CAMPFIRE && !G.campUsed) cf2 = [x, y];
-        if (cf2 && p.hp < p.maxHp * 0.97) {
+        if (cf2 && p.hp < p.maxHp * (nonBoss.length ? 0.6 : 0.97)) {
           if (manh(cf2, p) === 1) { MD.Input.act({ t: "move", dx: cf2[0] - p.x, dy: cf2[1] - p.y }); continue; }
           window.__walkTo(G, cf2[0], cf2[1]); continue;
         }
@@ -188,11 +249,14 @@ await page.evaluate(() => {
     }
     const G = MD.Main.game.G;
     return {
-      turns, floorIdx: G ? G.floorIdx : -1, hp: G ? G.player.hp : 0, maxHp: G ? G.player.maxHp : 0,
+      turns, rounds: G ? G.round : 0, pos: G ? G.player.x + "," + G.player.y : "?", floorIdx: G ? G.floorIdx : -1, hp: G ? G.player.hp : 0, maxHp: G ? G.player.maxHp : 0,
       money: G ? G.money : 0, kills: G ? G.kills : 0, food: G ? G.items.filter(i => i.id === "fantuan" || i.id === "mantou").reduce((a, b) => a + b.n, 0) : 0,
       learned: G ? Object.keys(G.learned).length : 0, relics: G ? G.relics.join(",") : "",
       over: MD.Main.game.overShown, won: G ? G.won : false,
       enemies: G ? window.__living(G).length : 0,
+      stuck: stuckInfo, trace,
+      rolling: rolling.slice(-14),
+      alive: G ? MD.Engine.livingEnemies(G).filter(u => u.chId !== "tree").map(u => u.name + "(" + u.hp + "/" + u.maxHp + (u.aggro ? ",追" : "") + ")") : [], diag,
       logs: G ? (G.ev || []).filter(e => e.t === "log").slice(-8).map(e => e.text) : []
     };
   };
@@ -202,6 +266,9 @@ await page.evaluate(() => {
 let floorSeen = 0;
 for (let c = 0; c < 80; c++) {
   const st = await page.evaluate(() => window.__chunk());
+  console.log(`  [chunk ${c}] 层${st.floorIdx + 1} 轮~${st.rounds || "?"} 血${st.hp} 斩${st.kills} 敌${st.enemies} 位${st.pos}` + (st.stuck ? " STUCK:" + JSON.stringify(st.stuck).slice(0, 600) : ""));
+  if (c <= 2 && st.trace) st.trace.forEach(l => console.log("    T " + l));
+  if (c === 10) { console.log("    D " + JSON.stringify(st.diag)); if (st.trace) st.trace.forEach(l => console.log("    T " + l)); }
   if (st.floorIdx > floorSeen) {
     floorSeen = st.floorIdx;
     await page.screenshot({ path: path.join(HERE, "..", "testshots", `flow-floor${st.floorIdx + 1}.png`) });
@@ -209,7 +276,8 @@ for (let c = 0; c < 80; c++) {
   }
   if (st.over) {
     console.log(`  ■ 终局：${st.won ? "收卷！" : "折于第" + (st.floorIdx + 1) + "层"} 斩${st.kills} 录技${st.learned} 卡[${st.relics}]`);
-    (st.logs || []).forEach(l => console.log("    · " + l));
+    (st.alive || []).forEach(a => console.log("    存活: " + a));
+    (st.rolling || []).forEach(l => console.log("    · " + l));
     break;
   }
 }

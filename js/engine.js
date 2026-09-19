@@ -74,7 +74,8 @@
       p.skills.unshift({ id: "xueji", name: "血祭", kind: "self", cd: 5, blood: 3, cdLeft: 0,
         desc: "损当前半血（至少留1），接下来三次伤害翻倍。（马刀之神亲传）" });
     }
-    if (runner.id === "yinkesi" && (meta.blood || 0) > 0) p.skills[0].blood += meta.blood;
+    if ((meta.blood || 0) > 0 && p.skills[0] && p.skills[0].id === "xueji") p.skills[0].blood += meta.blood; /* 血性修炼：凡血祭皆适用 */
+
     G._metaBonuses = meta; /* enterFloor 的每层加成从这里读 */
     G.player = p;
     enterFloor(G, 0);
@@ -92,7 +93,8 @@
     G.map = built.map;
     const places = built.places;
     const d = D.DIFF_BY_V[G.diff];
-    const scaleHp = (v) => Math.max(1, Math.round(v * d.eHp));
+    const depth = 1 + 0.05 * floorIdx; /* 层深递增：越深越硬（第9层+40%） */
+    const scaleHp = (v) => Math.max(1, Math.round(v * d.eHp * depth));
     const scaleDmg = (v) => Math.max(1, v + d.eDmg);
     G.enemies = [];
     if (places.boss) {
@@ -241,7 +243,8 @@
     /* 卧薪尝胆（被打者积怨） */
     if (hasP(def, "grudgeStack")) def.st.grudge = Math.min(def.passive.grudgeCap || 2, def.st.grudge + def.passive.grudgeStack);
     /* 附加效果 */
-    if (opt.stun && !hasP(def, "immuneStun")) def.st.stun = Math.max(def.st.stun, opt.stun);
+    /* 反控制链：已晕者不可再被晕（晕完必须给一回合行动权） */
+    if (opt.stun && !hasP(def, "immuneStun") && def.st.stun === 0) def.st.stun = opt.stun;
     if (opt.seal) def.st.disarm = Math.max(def.st.disarm, opt.seal);
     if (opt.poison) def.st.poison = Math.max(def.st.poison, opt.poison);
     if (opt.heal && !att.dead) heal(G, att, opt.heal);
@@ -290,8 +293,8 @@
     if (def.side === "p") { playerDown(G); return; }
     if (att && att.side === "p") {
       G.kills++;
-      /* 击破回血：卷八古法，击破一名敌人回复2血（「庆功之宴」升为4） */
-      heal(G, att, G.relics.includes("killheal") ? 4 : 2);
+      /* 击破回血：卷八古法，击破一名敌人回复3血（「庆功之宴」升为5） */
+      heal(G, att, G.relics.includes("killheal") ? 5 : 3);
       /* 战利品：杂兵2-3钱、精英6-9钱 */
       if (def.mob) { const m = 2 + G.r.int(0, 1); G.money += m; ev(G, { t: "coin", x: def.x, y: def.y, val: m }); }
       else if (def.elite) { const m = 6 + G.r.int(0, 3); G.money += m; ev(G, { t: "coin", x: def.x, y: def.y, val: m }); }
@@ -499,9 +502,9 @@
     }
   }
   function isSpecialTile(G, x, y) {
-    /* 史料与楼梯格可通行（玩家走过拾/踏上另行交互）；箱/灶/商摊对敌是障碍 */
+    /* 敌人绕行：箱与商摊是实体障碍；灶间可通行（敌人不会用灶，但绝不能被它卡死成软锁） */
     const Gr = G3(); const t = Gr.at(G.map, x, y);
-    return t === Gr.CHEST || t === Gr.SHOP || t === Gr.CAMPFIRE;
+    return t === Gr.CHEST || t === Gr.SHOP;
   }
   function bossTaunt(G, chId) {
     const pool = {
@@ -869,9 +872,9 @@
     G.firstClears.push(G.floorIdx); // 记录（首次赏由 run 层判重）
     ev(G, { t: "descend" });
     enterFloor(G, G.floorIdx + 1);
-    /* 下行喘息：回25%血 */
+    /* 下行喘息：回35%血 */
     const p = G.player;
-    heal(G, p, Math.max(2, Math.round(p.maxHp * 0.25)));
+    heal(G, p, Math.max(3, Math.round(p.maxHp * 0.35)));
   }
 
   /* ---------------- 用技 ---------------- */
