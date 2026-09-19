@@ -110,6 +110,19 @@ console.log("8 H 帮助:", helpTxt.includes("目标") ? "OK" : "FAIL「" + helpT
   console.log("8b J 有敌才打:", (r.facingLeft && r2.dmg >= 2 && r2.px === r.x0 && r2.py === r.y0) ? "OK（伤" + r2.dmg + "，未移动）" : "FAIL " + JSON.stringify([r, r2]));
 }
 
+// 8c) toast 去重：连按 J 空挥三次，同文提示只保留一条
+{
+  await page.keyboard.press("j"); await page.waitForTimeout(80);
+  await page.keyboard.press("j"); await page.waitForTimeout(80);
+  await page.keyboard.press("j"); await page.waitForTimeout(150);
+  const dup = await page.evaluate(() => {
+    const texts = [...document.querySelectorAll("#toasts .toast")].map(t => t.dataset.text);
+    const same = texts.filter(t => t && t.includes("挥刀落空"));
+    return { total: texts.length, sameN: same.length };
+  });
+  console.log("8c toast 去重:", dup.sameN <= 1 && dup.total <= 3 ? "OK（同文 " + dup.sameN + " 条，总 " + dup.total + " 条）" : "FAIL " + JSON.stringify(dup));
+}
+
 // 9) 全程无页面错误
 console.log("9 页面错误:", errs.length ? "FAIL " + errs.join(" | ") : "OK（无）");
 await page.screenshot({ path: "testshots/keys-final.png" });

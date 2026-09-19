@@ -2069,14 +2069,23 @@ button { font-family: inherit; }
   }
   const $ = (id) => document.getElementById(id);
 
-  /* ---- toast ---- */
+  /* ---- toast：同文去重（刷新计时）+ 最多 3 条，不遮挡视野 ---- */
   function toast(text, ms) {
     const box = $("toasts");
     if (!box) return;
+    const dup = [...box.children].find(t => t.dataset.text === text);
+    if (dup) {
+      clearTimeout(dup._t1); clearTimeout(dup._t2);
+      dup._t1 = setTimeout(() => { dup.style.opacity = "0"; dup.style.transition = "opacity .4s"; }, ms || 1900);
+      dup._t2 = setTimeout(() => dup.remove(), (ms || 1900) + 450);
+      return;
+    }
     const t = el("div", "toast", text);
+    t.dataset.text = text;
     box.appendChild(t);
-    setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .4s"; }, ms || 1900);
-    setTimeout(() => t.remove(), (ms || 1900) + 450);
+    while (box.children.length > 3) box.firstChild.remove();
+    t._t1 = setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .4s"; }, ms || 1900);
+    t._t2 = setTimeout(() => t.remove(), (ms || 1900) + 450);
   }
 
   /* ---- 音效：WebAudio 程序合成，零外部资源 ---- */
