@@ -127,6 +127,8 @@
         case "blood": addFloat(e.x, e.y, "血祭！", "#c14b3a"); S.hit(); break;
         case "die": addFloat(e.x, e.y, "倒", "#c14b3a"); S.kill(); break;
         case "learn": MDG.APP.toast("录技：「" + e.name + "」入谱"); S.learn(); break;
+        case "lethalkeep": addFloat(e.x, e.y, "免死！", "#ecd39a"); S.parry(); break;
+        case "coin": addFloat(e.x, e.y, "+" + e.val + " 钱", "#c9a45f"); S.coin(); break;
         case "relic": MDG.APP.toast("得刀卡「" + e.name + "」"); S.chest(); break;
         case "alert": if (e.boss) { showBossCard(e.name); S.boss(); } break;
         case "bottle": addFloat(e.x, e.y, "砰！-1", "#c14b3a"); S.bottle(); kick(); break;

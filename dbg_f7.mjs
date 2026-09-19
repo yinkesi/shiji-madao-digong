@@ -1,0 +1,17 @@
+import { loadCore, placeEnemy } from "./tests/harness.mjs";
+const ctx = loadCore();
+const { Engine, Grid } = ctx.MDG;
+Engine.setTeleChance(0);
+const G = Engine.newRunState({ seed: "dbg-f7", runnerId: "yinkesi", diffV: "normal", meta: {} });
+G.enemies = [];
+const [px, py] = [G.player.x, G.player.y];
+for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) Grid.set(G.map, px+dx, py+dy, Grid.FLOOR);
+G.relics.push("grudge");
+const foe = placeEnemy(ctx, G, "mob", px + 1, py, { aggro: true });
+foe.hp = 99; foe.maxHp = 99; foe.dmg = 1;
+G.player.hp = 999;
+console.log("relics:", G.relics);
+const evs = Engine.act(G, { t: "wait" });
+console.log("evs:", evs.map(e => e.t + (e.dmg != null ? ":" + e.dmg : "")).join(","));
+console.log("player hp:", G.player.hp, "grudge:", G.player.st.grudge);
+console.log("logs:", (G.ev||[]).filter(e=>e.t==="log").map(e=>e.text));

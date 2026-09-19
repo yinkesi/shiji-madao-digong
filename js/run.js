@@ -47,7 +47,7 @@
       floorName: D.FLOORS[G.floorIdx].name,
       bestFloor: G.bestFloor || (G.floorIdx + 1),
       kills: G.kills || 0, eliteKills: G.eliteKills || 0,
-      bossKills: (G.bossKills || []).map(id => D.CH(id).name),
+      bossKills: [...new Set(G.bossKills || [])].map(id => D.CH(id).name),
       learned: Object.keys(G.learned || {}).map(id => D.CH(id).name),
       scrolls: (G.scrollsGot || []).length,
       relics: (G.relics || []).map(id => D.RELICS[id].name),

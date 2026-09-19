@@ -10,6 +10,9 @@ function fresh() {
   const G = Engine.newRunState({ seed: "parry-" + Math.floor(Math.random() * 1e9), runnerId: "yinkesi", diffV: "normal", meta: {} });
   G.enemies = [];
   G.player.hp = 999;
+  /* 雕平出生点四邻：摆放不赌随机地图 */
+  const [px, py] = [G.player.x, G.player.y];
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0]]) Grid.set(G.map, px + dx, py + dy, Grid.FLOOR);
   return G;
 }
 

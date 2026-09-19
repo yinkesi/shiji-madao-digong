@@ -69,6 +69,11 @@
     p.hp = p.maxHp;
     p.dmg = runner.dmg || 2;
     addSkill(p, runner.skill);                 // 血祭（或该将本技）打底
+    if (runner.id === "wonder") {
+      /* 马刀之神亲传：血祭三连（置于技首，与被动「血祭后三次翻倍」配套） */
+      p.skills.unshift({ id: "xueji", name: "血祭", kind: "self", cd: 5, blood: 3, cdLeft: 0,
+        desc: "损当前半血（至少留1），接下来三次伤害翻倍。（马刀之神亲传）" });
+    }
     if (runner.id === "yinkesi" && (meta.blood || 0) > 0) p.skills[0].blood += meta.blood;
     G._metaBonuses = meta; /* enterFloor 的每层加成从这里读 */
     G.player = p;
@@ -116,6 +121,7 @@
     G.scrollsTotal = places.scrolls.length;
     G.stairsOpen = false;
     G._stairsOpen = false; // 渲染用缓存：每次 act 末刷新
+    G._floorKnifeUsed = false; // 锦绣夜行：每层首刀重置
     G.key = false;
     /* 史官落点：出生宫室正中 */
     G.player.x = G.map.spawn[0]; G.player.y = G.map.spawn[1];
@@ -170,11 +176,11 @@
     if (!opt.pierce && hasP(def, "dodge") && G.r.chance(def.passive.dodge)) {
       ev(G, { t: "miss", x: def.x, y: def.y, name: def.name });
       log(G, def.name + "闪过一击。");
-      return;
+      return 0;
     }
     let dmg = opt.dmg || 0;
     /* 弹反：亮刀之敌被迎击——加伤并令其失措（攻势尽消） */
-    if (att.side === "p" && def.side === "e" && def.telegraph && !def.dead) {
+    if (att.side === "p" && def.side === "e" && def.telegraph && !def.dead && !opt.noCleave) {
       dmg += 2;
       def._parried = true;
       def.parries = (def.parries || 0) + 1;
@@ -212,8 +218,8 @@
       if (hasP(att, "grudgeStack") && att.st.grudge > 0) { dmg += 1; att.st.grudge--; }
     }
     if (kind === "skill" && opt.evenBonus && def.hp % 2 === 0) dmg += opt.evenBonus;
-    /* 血祭之力 */
-    if (att.st.emp > 0) { dmg *= 2; att.st.emp--; ev(G, { t: "emp", x: att.x, y: att.y }); }
+    /* 血祭之力（溅射不消耗） */
+    if (att.st.emp > 0 && !opt.noEmp) { dmg *= 2; att.st.emp--; ev(G, { t: "emp", x: att.x, y: att.y }); }
     /* 暴击（秒之） */
     let crit = false;
     if (hasP(att, "critChance") && G.r.chance(att.passive.critChance)) { dmg = Math.round(dmg * (att.passive.critMul || 2)); crit = true; }
@@ -229,7 +235,7 @@
       if (dmg > 0 && hasP(def, "firstHitReduce") && !def.firstHitTaken) { dmg = Math.max(0, dmg - def.passive.firstHitReduce); def.firstHitTaken = true; }
       if (dmg > 0 && hasP(def, "auraReduce") && adj(att, def)) dmg = Math.max(1, dmg - def.passive.auraReduce);
     }
-    if (dmg <= 0) { ev(G, { t: "hit", x: def.x, y: def.y, dmg: 0, crit, zero: true }); return; }
+    if (dmg <= 0) { ev(G, { t: "hit", x: def.x, y: def.y, dmg: 0, crit, zero: true }); return 0; }
     def.hp -= dmg;
     ev(G, { t: "hit", x: def.x, y: def.y, dmg, crit });
     /* 卧薪尝胆（被打者积怨） */
@@ -245,10 +251,13 @@
       const [px, py] = Gr.pushDest(G.map, def.x, def.y, dx, dy, opt.push, (x, y) => occupied(G, x, y));
       def.x = px; def.y = py;
     }
-    log(G, (att.side === "p" ? "汝击" : "") + (att.side === "e" && def.side === "p" ? "" : "") + hitLine(G, att, def, dmg, kind, crit));
+    log(G, hitLine(G, att, def, dmg, kind, crit));
     if (att.side === "e" && def.side === "e") log(G, "〔党争〕" + att.name + "误伤了" + def.name + "！");
+    /* 卧薪尝胆（刀卡）：玩家受伤积怨，下次刀击+1（至多2层） */
+    if (def.side === "p" && G.relics.includes("grudge")) def.st.grudge = Math.min(2, def.st.grudge + 1);
     if (def.hp <= 0) kill(G, att, def);
     else uprisingCheck(G);
+    return dmg;
   }
 
   function hitLine(G, att, def, dmg, kind, crit) {
@@ -267,6 +276,14 @@
   }
 
   function kill(G, att, def) {
+    /* 免死（敌）：皇太子留1血 / 弃车保帅留血回气 */
+    if (def.side === "e" && hasP(def, "lethalKeep") && !def.lethalUsed) {
+      def.lethalUsed = true;
+      def.hp = 1 + (def.passive.lethalKeep > 1 ? def.passive.lethalKeep : 0);
+      ev(G, { t: "lethalkeep", x: def.x, y: def.y });
+      log(G, def.name + "弃车保帅——致命伤下留得一命！");
+      return;
+    }
     def.dead = true; def.hp = 0;
     ev(G, { t: "die", x: def.x, y: def.y, glyph: def.glyph, color: def.color, boss: def.boss, chId: def.chId });
     log(G, def.side === "p" ? "汝倒于地下。" : def.name + "败。" + (def.boss ? "镇守已除！" : ""));
@@ -275,6 +292,9 @@
       G.kills++;
       /* 击破回血：卷八古法，击破一名敌人回复2血（「庆功之宴」升为4） */
       heal(G, att, G.relics.includes("killheal") ? 4 : 2);
+      /* 战利品：杂兵2-3钱、精英6-9钱 */
+      if (def.mob) { const m = 2 + G.r.int(0, 1); G.money += m; ev(G, { t: "coin", x: def.x, y: def.y, val: m }); }
+      else if (def.elite) { const m = 6 + G.r.int(0, 3); G.money += m; ev(G, { t: "coin", x: def.x, y: def.y, val: m }); }
       if (def.boss) {
         G.bossKills.push(def.chId);
         G.wemai += 6;
@@ -283,8 +303,8 @@
       } else if (def.elite) {
         G.eliteKills++; G.wemai += 2;
       }
-      /* 录技：首次斩有名之角色；图鉴记录 */
-      if (!def.mob && !G.learned[def.chId]) {
+      /* 录技：史官专属——首次斩有名之角色，录其技；图鉴记录 */
+      if (!def.mob && !G.learned[def.chId] && G.player.chId === "yinkesi") {
         G.dexKills = G.dexKills || {};
         G.dexKills[def.chId] = (G.dexKills[def.chId] || 0) + 1;
         const ch = D2().CH(def.chId);
@@ -347,7 +367,8 @@
           if (Math.abs(dx) + Math.abs(dy) !== r) continue;
           const x = boss.x + dx, y = boss.y + dy;
           const Gr = G3();
-          if (Gr.inB(G.map, x, y) && Gr.walkable(G.map, x, y) && !occupied(G, x, y)) {
+          const tt = Gr.at(G.map, x, y);
+          if (Gr.inB(G.map, x, y) && (tt === Gr.FLOOR || tt === Gr.CORR) && !occupied(G, x, y)) {
             const d = D2().DIFF_BY_V[G.diff];
             const m = makeUnit("mob", x, y, {});
             m.maxHp = Math.max(1, Math.round(m.maxHp * d.eHp)); m.hp = m.maxHp; m.dmg = Math.max(1, m.dmg + d.eDmg);
@@ -590,18 +611,64 @@
 
   /* ---------------- 玩家动作 ---------------- */
   /* action: {t:'move',dx,dy} | {t:'skill',si,tx,ty} | {t:'item',ii,tx,ty} | {t:'wait'} */
+  /* 动作预校验：无效动作不推进时间（撞墙/技无目标/掷无目标/梯封未开/血不敷祭） */
+  function actionValid(G, action) {
+    if (!action) return false;
+    const p = G.player, Gr = G3();
+    if (action.t === "wait") return true;
+    if (action.t === "move") {
+      const nx = p.x + action.dx, ny = p.y + action.dy;
+      if (!Gr.inB(G.map, nx, ny)) return false;
+      const foe = unitAt(G, nx, ny);
+      if (foe && foe.side === "e") return true;
+      const tile = Gr.at(G.map, nx, ny);
+      if (tile === Gr.WALL) return false;
+      if (tile === Gr.STAIRS && !computeStairs(G)) {
+        const names = gateIds(G).filter(id => G.enemies.some(u => u.chId === id && !u.dead)).map(id => D2().CH(id).name);
+        log(G, "梯封未开——尚有镇守：" + names.join("、"));
+        return false;
+      }
+      return true;
+    }
+    if (action.t === "skill") {
+      const sk = p.skills[action.si];
+      if (!sk || sk.cdLeft > 0 || p.st.disarm > 0) return false;
+      if (sk.id === "xueji" && p.hp < 2) return false; /* 血不敷祭 */
+      return skillTargetOk(G, p, sk, action.tx, action.ty);
+    }
+    if (action.t === "item") {
+      const it = G.items[action.ii];
+      if (!it || it.n <= 0) return false;
+      const def = D2().ITEMS[it.id];
+      if (def.kind === "throw") {
+        const foe = action.tx != null ? unitAt(G, action.tx, action.ty) : null;
+        return !!(foe && foe.side === "e" && !foe.dead && Gr.manh(p.x, p.y, action.tx, action.ty) <= (def.range || 3));
+      }
+      return true;
+    }
+    return false;
+  }
+
   function act(G, action) {
     if (G.over) return G.ev = [], [];
     G.ev = [];
     const evs = G.ev;
+    if (!actionValid(G, action)) return evs.slice(); /* 时间不动 */
     roundStart(G);
     if (!G.over) {
       const p = G.player;
-      if (action.t === "move") doMove(G, p, action.dx, action.dy);
-      else if (action.t === "skill") doSkill(G, p, action.si, action.tx, action.ty);
-      else if (action.t === "item") doItem(G, p, action.ii, action.tx, action.ty);
-      else if (action.t === "wait") { if (!action.auto) log(G, "汝按刀不动。（待机）"); }
-      /* 兜底 */
+      if (p.st.stun > 0) {
+        /* 被晕：任何行动都使不出，白白失一轮 */
+        p.st.stun--;
+        ev(G, { t: "stunned", x: p.x, y: p.y });
+        log(G, "汝目眩神迷，动弹不得——此轮废了。");
+      } else {
+        if (action.t === "move") doMove(G, p, action.dx, action.dy);
+        else if (action.t === "skill") doSkill(G, p, action.si, action.tx, action.ty);
+        else if (action.t === "item") doItem(G, p, action.ii, action.tx, action.ty);
+        else if (action.t === "wait") { if (!action.auto) log(G, "汝按刀不动。（待机）"); }
+        /* 兜底 */
+      }
     }
     if (!G.over && !G.won) enemiesAct(G);
     if (!G.over) turnEnd(G);
@@ -669,11 +736,24 @@
     if (!Gr.inB(G.map, nx, ny)) return;
     const foe = unitAt(G, nx, ny);
     if (foe && foe.side === "e") {
-      /* 撞击即刀击（长杆马刀让玩家可以隔一格刺） */
-      strike(G, p, foe, "knife", { base: p.dmg, dmg: p.dmg });
+      const dealt = strike(G, p, foe, "knife", { base: p.dmg, dmg: p.dmg });
+      /* 刀扫一片：波及身旁另一敌（不连锁、不再触发弹反/蓄力） */
+      if (G.relics.includes("cleave") && dealt > 0) {
+        const other = G.enemies.find(u => u !== foe && !u.dead && u.side === "e" && u.chId !== "tree" && adj(u, p));
+        if (other) strike(G, p, other, "skill", { dmg: dealt, noEmp: true, noCleave: true, pierce: true });
+      }
       return;
     }
     if (foe && foe.side === "p") return;
+    /* 长杆马刀：面前隔一格之敌可直刺（不移动） */
+    if (G.relics.includes("reach")) {
+      const mx = p.x + 2 * dx, my = p.y + 2 * dy;
+      const far = Gr.inB(G.map, mx, my) ? unitAt(G, mx, my) : null;
+      if (far && far.side === "e" && !far.dead && Gr.walkable(G.map, nx, ny) && !occupied(G, nx, ny)) {
+        strike(G, p, far, "knife", { base: p.dmg, dmg: p.dmg });
+        return;
+      }
+    }
     const t = Gr.at(G.map, nx, ny);
     if (t === Gr.WALL) return;
     if (t === Gr.TREE) { /* 树可击碎 */
@@ -818,8 +898,8 @@
     ev(G, { t: "skill", name: sk.name, who: "汝" });
     if (sk.id === "xueji") { /* 血祭：至多损半、至少留1；「以道代血」免损 */
       let pay = 0;
-      if (!G.relics.includes("bloodfree")) { pay = Math.min(Math.floor(p.hp / 2), p.hp - 1); p.hp -= pay; }
-      p.st.emp += (sk.blood || 2);
+      if (!G.relics.includes("bloodfree")) { pay = Math.max(1, Math.min(Math.floor(p.hp / 2), p.hp - 1)); p.hp -= pay; }
+      p.st.emp = Math.min(4, p.st.emp + (sk.blood || 2)); /* 蓄力封顶，不可无限囤 */
       ev(G, { t: "blood", x: p.x, y: p.y, pay, charges: p.st.emp });
       log(G, "血祭！" + (pay ? "损" + pay + "血，" : "") + "接下来" + p.st.emp + "次伤害翻倍。");
       return;
