@@ -64,6 +64,9 @@
     src.connect(g).connect(c.destination); src.start();
   }
   const sfx = {
+    swing() { noise(.04, .035); tone(400, .06, "triangle", .04, -170); },
+    block() { tone(740, .09, "triangle", .08, -160); noise(.025, .035); },
+    miss() { noise(.065, .025); },
     hit() { tone(220, .09, "square", .1, -80); noise(.06, .08); },
     hurt() { tone(140, .16, "sawtooth", .12, -60); noise(.1, .1); },
     kill() { tone(180, .22, "square", .1, -120); },

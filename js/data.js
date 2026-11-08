@@ -17,7 +17,7 @@
   const CHARS = {
     yinkesi: {
       id: "yinkesi", name: "音克思", hao: "史官", glyph: "史", color: "#c9a45f",
-      hp: 20, dmg: 2, runner: true,
+      hp: 20, dmg: 2, runner: true, attackRecovery: 1,
       passive: { name: "录技", desc: "首次斩杀有名之角色，录其技入刀谱（仅史官可得）。" },
       skill: { id: "xueji", name: "血祭", kind: "self", cd: 5,
         desc: "损当前半血（至少留1），接下来两次伤害翻倍。", blood: 2 },
@@ -26,7 +26,7 @@
     },
     /* ---- 学子（杂兵）与树 ---- */
     mob: { id: "mob", name: "实验学子", hao: "路人", glyph: "生", color: "#8c8577",
-      hp: 4, dmg: 1, mob: true, saw: 5,
+      hp: 4, dmg: 2, mob: true, saw: 7, attackRecovery: 1,
       passive: { name: "无", desc: "无。" }, quote: "凡马刀，规则至简，而引人入胜。", bio: "地宫里游荡的旧日同窗。" },
     tree: { id: "tree", name: "树", hao: "崇国所种", glyph: "木", color: "#4c6b3c",
       hp: 1, dmg: 0, mob: true, saw: 0,
@@ -192,23 +192,23 @@
    * boss/elite/mobs: 生成配方。gate: 梯锁条件（默认镇守死则开）。
    * shop: 有小卖部否。 */
   const FLOORS = [
-    { n: 1, name: "跑道之下", rule: null, ruleDesc: "", boss: "wanzhen", elites: [], mobs: 3,
+    { n: 1, name: "跑道之下", rule: null, ruleDesc: "", boss: "wanzhen", elites: [], mobs: 3, traps: ["spike"],
       intro: "梦从操场开始。白线还在，万震坐在跑道边等一道题——他说过，题来了才抬头。想往下走，先接他一刀。" },
-    { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 3,
+    { n: 2, name: "异能之窟", rule: "dyad", ruleDesc: "情比金坚：相邻之敌，其伤加一——先分其阵", boss: "dage", elites: ["shenren", "xiannv"], mobs: 3, traps: ["spike"],
       intro: "走廊记得那三个人。异能者在梦里也不会让路，只会合唱——先分开他们，再面见大哥。" },
-    { n: 3, name: "三国刀廊", rule: "chaos", ruleDesc: "党争：敌人二成机率打错人——同门相争，各怀鬼胎", boss: "luhao", elites: ["xiaochuan"], mobs: 4,
+    { n: 3, name: "三国刀廊", rule: "chaos", ruleDesc: "党争：敌人二成机率打错人——同门相争，各怀鬼胎", boss: "luhao", elites: ["xiaochuan"], mobs: 4, traps: ["spike", "poison"],
       intro: "教室的课桌长进了土里，两把刀还插着。鲁豪在等一场没打完的架——记忆里的他，说过『急击勿失』。" },
-    { n: 4, name: "协会堂", rule: "uprising", ruleDesc: "起义：琛半血之时，其二心腹必至", boss: "zichen", elites: ["guyin", "yiran"], mobs: 4, shop: true,
+    { n: 4, name: "协会堂", rule: "uprising", ruleDesc: "起义：琛半血之时，其二心腹必至", boss: "zichen", elites: ["guyin", "yiran"], mobs: 4, shop: true, traps: ["spike", "poison"],
       intro: "折叠桌还在，『世界马刀协会』被摸得发亮。子琛从不商量：此为通知尔，非求建议也——他半血之时，记得留后手。" },
-    { n: 5, name: "合流渊", rule: "stench", ruleDesc: "鲍鱼之肆：回合结束，相邻者互相腐蚀各损1血——贴身即换血", boss: "touge", elites: ["lifan", "limo"], mobs: 5, shop: true,
+    { n: 5, name: "合流渊", rule: "stench", ruleDesc: "鲍鱼之肆：回合结束，相邻者互相腐蚀各损1血——贴身即换血", boss: "touge", elites: ["lifan", "limo"], mobs: 5, shop: true, traps: ["spike", "poison"],
       intro: "食堂的灯管还在频闪。六班七班合流之处溴味不散——头哥的陀螺，在梦里也没停过。" },
-    { n: 6, name: "禁令厅", rule: "suomen", ruleDesc: "锁门：击退之术失效；梯封两重——须斩钦法，并缴为兵之钥", boss: "qinfa", elites: ["weibing", "xiangdong"], mobs: 5, shop: true, gateExtra: ["weibing"],
+    { n: 6, name: "禁令厅", rule: "suomen", ruleDesc: "锁门：击退之术失效；梯封两重——须斩钦法，并缴为兵之钥", boss: "qinfa", elites: ["weibing", "xiangdong"], mobs: 5, shop: true, gateExtra: ["weibing"], traps: ["spike", "poison", "rock"],
       intro: "办公楼一层比一层静。钦法还在等一个解释，为兵的相机还没放下——这一层梯封两重，钥匙在别人身上。" },
-    { n: 7, name: "神算之间", rule: "yansuan", ruleDesc: "验算：回合末，wonder 血量为偶则回2血——算好伤害，打成奇数", boss: "wonder", elites: ["wenbin", "wanzhen"], mobs: 5, shop: true,
+    { n: 7, name: "神算之间", rule: "yansuan", ruleDesc: "验算：回合末，wonder 血量为偶则回2血——算好伤害，打成奇数", boss: "wonder", elites: ["wenbin", "wanzhen"], mobs: 5, shop: true, traps: ["spike", "poison", "rock"],
       intro: "图书馆只剩一盏灯。wonder 把粉笔题画了一地：『人也是题。』——梦里他还不认输，验算从不出错。" },
-    { n: 8, name: "崇国庭", rule: "zhongshu", ruleDesc: "种树不绝：每回合生树堵路（至多三株）——树亦可为汝挡刀", boss: "chongguo", elites: ["qinfa", "qiyue", "ziye"], mobs: 5, shop: true,
+    { n: 8, name: "崇国庭", rule: "zhongshu", ruleDesc: "种树不绝：每回合生树堵路（至多三株）——树亦可为汝挡刀", boss: "chongguo", elites: ["qinfa", "qiyue", "ziye"], mobs: 5, shop: true, traps: ["spike", "poison", "rock"],
       intro: "校长室沉在最深处。卷宗合不上，树一茬一茬地长——记忆里的崇国，还在种他的树。" },
-    { n: 9, name: "终焉之庭", rule: "cans", ruleDesc: "看台飞瓶：与敌同行或同列，回合初被砸1血——走位，别站线上", boss: "wonder", bossTag: "终焉", elites: ["dage", "shaoming"], mobs: 6,
+    { n: 9, name: "终焉之庭", rule: "cans", ruleDesc: "看台飞瓶：与敌同行或同列，回合初被砸1血——走位，别站线上", boss: "wonder", bossTag: "终焉", elites: ["dage", "shaoming"], mobs: 6, traps: ["spike", "poison", "rock"],
       intro: "梧桐叶落在铁门上。看台空着，看的人永远在看——最后一战。写完它，就毕业。" }
   ];
 
@@ -225,8 +225,20 @@
   };
   const SHOP_STOCK = ["fantuan", "mantou", "jitui", "hugoushuang", "yumi", "shuihu", "heibang", "tuoluo"];
 
+  /* ---------------- 陷阱类型 ----------------
+     spike 尖刺：踩中损3，一次性（默认）
+     poison 毒沼：踩上中毒3回合（不报废，持续危险）
+     rock 落石：站在其同行同列，回合末被落石砸1（一次性） */
+  const TRAP_KINDS = {
+    spike: { name: "尖刺", desc: "踩上损3血，一次性。", dmg: 3, once: true },
+    poison: { name: "毒沼", desc: "踩上中毒3回合，沼泽不消失。", poison: 3, once: false },
+    rock: { name: "落石", desc: "处在同排同列，回合末被砸1血，石落即碎。", rock: 1, once: true }
+  };
+
   /* ---------------- 刀卡（遗物，本轮有效） ---------------- */
   const RELICS = {
+    counterguard: { id: "counterguard", name: "反守为攻", desc: "弹反成功获得1盾，此效果最多补到3盾。适合近身迎击与多敌战。" },
+    insight: { id: "insight", name: "见招悟刀", desc: "弹反成功令全部技能冷却额外减少1回合。适合弹反与技能交替。" },
     firststrike: { id: "firststrike", name: "先手刀", desc: "刀击永远+1——本作一刀一回合，刀刀皆先手。（早读查得严，唯快不破）" },
     shield3: { id: "shield3", name: "班主任的偏爱", desc: "每层开局获得3点护盾。（含笑素善大哥）" },
     bloodfree: { id: "bloodfree", name: "以道代血", desc: "血祭不再损血，只耗一息。（道之所在，血不轻洒）" },
@@ -264,5 +276,5 @@
   ];
 
   ROOT.MDG = ROOT.MDG || {};
-  ROOT.MDG.DATA = { CHARS, CH, DIFFS, DIFF_BY_V, FLOORS, ITEMS, SHOP_STOCK, RELICS, META_TREE, ACHIEVES };
+  ROOT.MDG.DATA = { CHARS, CH, DIFFS, DIFF_BY_V, FLOORS, ITEMS, SHOP_STOCK, RELICS, META_TREE, ACHIEVES, TRAPS: TRAP_KINDS };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -20,7 +20,7 @@ function fresh(floorIdx = 0, rule = null) {
   const a = placeEnemy(ctx, G, "mob", px + 1, py, { aggro: true });
   placeEnemy(ctx, G, "mob", px + 2, py, { aggro: true });
   G.player.hp = 100;
-  Engine.act(G, { t: "wait" });
+  for (let i = 0; i < 4; i++) Engine.act(G, { t: "wait" });
   /* 玩家100血任打；验证 a 的伤害为 2（1+1） */
   t.ok(G.player.hp <= 98, "dyad：相邻敌伤+1（100-2）");
   void a;
@@ -32,8 +32,8 @@ function fresh(floorIdx = 0, rule = null) {
   const [px, py] = G.map.spawn;
   placeEnemy(ctx, G, "mob", px + 1, py, { aggro: true });
   G.player.hp = 100;
-  Engine.act(G, { t: "wait" });
-  t.ok(G.player.hp === 99, "孤敌伤1（对照）");
+  Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" });
+  t.ok(G.player.hp === 98, "孤敌伤2（对照）");
 }
 
 /* stench 鲍鱼之肆：回合末相邻互蚀 */

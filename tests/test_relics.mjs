@@ -26,6 +26,7 @@ function fresh() {
   /* 本作一回合一步：每个行动轮都是「该回合首次刀击」——先手刀=常驻+1（描述已写实） */
   const b = placeEnemy(ctx, G, "mob", G.player.x - 1, G.player.y, { aggro: true });
   b.hp = 99; b.maxHp = 99;
+  Engine.act(G, { t: "wait" }); // 普攻恢复一回合
   Engine.act(G, { t: "move", dx: -1, dy: 0 });
   t.eq(99 - b.hp, 3, "次轮首刀同样+1（伤3）");
 }
@@ -73,6 +74,7 @@ function fresh() {
   t.ok(!qinfa || qinfa.dead, "钦法已除");
   t.eq(Engine.stairsOpenNow(G), false, "为兵尚在 → 梯仍锁");
   if (weibing) { weibing.hp = 1; weibing.x = G.player.x; weibing.y = G.player.y + 1; Grid.set(G.map, weibing.x, weibing.y, Grid.FLOOR); }
+  Engine.act(G, { t: "wait" }); // 普攻恢复一回合
   Engine.act(G, { t: "move", dx: 0, dy: 1 }); // 斩为兵
   t.eq(Engine.stairsOpenNow(G), true, "双钥匙齐除 → 梯开");
 }

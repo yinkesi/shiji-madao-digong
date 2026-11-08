@@ -30,7 +30,11 @@
       /* boss 身份由入层时的落位显式给定（同一人可镇守一层、又为别层精英） */
       boss: !!opts.boss, elite: !!opts.elite, mob: !!ch.mob,
       aggro: false, dead: false, lethalUsed: false, firstHitTaken: false,
-      telegraph: false, _parried: false, parryCd: 0,
+      /* 普攻冷却独立于技能冷却：attackCd 是当前还需恢复的行动数。 */
+      attackCd: 0,
+      attackRecovery: Math.max(0, ch.attackRecovery == null ? 1 : ch.attackRecovery),
+      attackWarning: false,
+      telegraph: false, _parried: false, parryCd: 0, atkWind: 0,
       bossTag: opts.bossTag || null
     };
     return u;
@@ -51,7 +55,7 @@
     const runner = D.CH(opts.runnerId || "yinkesi");
     if (!runner || !runner.runner) throw new Error("bad runner: " + opts.runnerId);
     const G = {
-      v: 1, seed, diff, runnerId: runner.id, floorIdx: 0, round: 1,
+      v: 1, combatTimingVersion: 1, combatTime: 0, seed, diff, runnerId: runner.id, floorIdx: 0, round: 1,
       money: 12 + (meta.purse || 0) * 12,
       learned: {},          // chId -> true（本轮已录技）
       learnedSkills: [],    // 已录主动技 id
@@ -127,6 +131,12 @@
     G.key = false;
     /* 史官落点：出生宫室正中 */
     G.player.x = G.map.spawn[0]; G.player.y = G.map.spawn[1];
+    /* 换层给刀锋一个干净的起手拍，避免上一层的恢复计时带入新地图。 */
+    normalizeAttackState(G.player);
+    G.player.attackCd = 0;
+    G.player.attackWarning = false;
+    G.player.telegraph = false;
+    G.player.atkWind = 0;
     if ((G.relics || []).includes("shield3")) G.player.st.shield += 3;
     /* 修炼「护身」：每层开局护盾（细水长流） */
     if (G._metaBonuses && G._metaBonuses.guard) G.player.st.shield += G._metaBonuses.guard;
@@ -148,6 +158,37 @@
   function occupied(G, x, y) { return !!unitAt(G, x, y); }
   function adj(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1; }
   function hasP(u, key) { return !!(u.passive && u.passive[key]); }
+  function normalizeAttackState(u) {
+    if (!Number.isFinite(u.attackCd)) u.attackCd = 0;
+    if (!Number.isFinite(u.attackRecovery)) u.attackRecovery = 1;
+    if (typeof u.attackWarning !== "boolean") u.attackWarning = false;
+  }
+  function clearAttackWindup(u) {
+    u.atkWind = 0;
+    u.attackWarning = false;
+    u.telegraph = false;
+  }
+  const PARRY_TIMING = Object.freeze({ open: 600, close: 780, strike: 820 });
+  function counterReady(G, u) {
+    const age = (G.combatTime || 0) - u.windupAt;
+    return !u.dead && !!u.telegraph && age >= PARRY_TIMING.open && age < PARRY_TIMING.close;
+  }
+  function canCounter(G, att, def) {
+    return att.side === "p" && def.side === "e" && counterReady(G, def) && adj(att, def);
+  }
+  function startKnife(G, att, def) {
+    normalizeAttackState(att);
+    /* 迎击是防御反应：相邻红框可打断自己的收刀，但仍产生正常冷却。 */
+    if (att.attackCd > 0 && !canCounter(G, att, def)) {
+      ev(G, { t: "attackCooldown", x: att.x, y: att.y, uid: att.uid, who: att.name, turns: att.attackCd });
+      return false;
+    }
+    /* +1 让 recovery=1 真正阻止下一个行动回合；turnEnd 会先消掉当前拍。 */
+    att.attackCd = att.attackRecovery + 1;
+    clearAttackWindup(att);
+    ev(G, { t: "attackStart", x: att.x, y: att.y, uid: att.uid, who: att.name, turns: att.attackRecovery });
+    return true;
+  }
   function livingEnemies(G) { return G.enemies.filter(u => !u.dead && !(u.chId === "tree")); }
   function treeCount(G) {
     let n = 0; const Gr = G3();
@@ -174,21 +215,32 @@
   function strike(G, att, def, kind, opt) {
     opt = opt || {};
     const evs = G.ev;
+    const counter = canCounter(G, att, def) && !opt.noCleave;
+    if (kind === "knife" && !startKnife(G, att, def)) return 0;
+    ev(G, { t: "swing", uid: att.uid, targetUid: def.uid, x: att.x, y: att.y,
+      tx: def.x, ty: def.y, kind, side: att.side });
     /* 闪避 */
-    if (!opt.pierce && hasP(def, "dodge") && G.r.chance(def.passive.dodge)) {
-      ev(G, { t: "miss", x: def.x, y: def.y, name: def.name });
+    if (!counter && !opt.pierce && hasP(def, "dodge") && G.r.chance(def.passive.dodge)) {
+      ev(G, { t: "miss", uid: def.uid, x: def.x, y: def.y, fromX: att.x, fromY: att.y, name: def.name });
       log(G, def.name + "闪过一击。");
       return 0;
     }
     let dmg = opt.dmg || 0;
     /* 弹反：亮刀之敌被迎击——加伤并令其失措（攻势尽消） */
-    if (att.side === "p" && def.side === "e" && def.telegraph && !def.dead && !opt.noCleave) {
-      dmg += 2;
+    if (counter) {
       def._parried = true;
       def.parries = (def.parries || 0) + 1;
       def.parryCd = Math.min(4, 1 + def.parries); /* 戒备逐次加长：1→2→3 回合 */
-      def.telegraph = false;
-      ev(G, { t: "parry", x: def.x, y: def.y, name: def.name });
+      clearAttackWindup(def);
+      ev(G, { t: "parry", uid: def.uid, x: def.x, y: def.y, fromX: att.x, fromY: att.y, name: def.name });
+      if (G.relics.includes("counterguard") && att.st.shield < 3) {
+        att.st.shield++;
+        ev(G, { t: "relicProc", x: att.x, y: att.y, text: "反守 +1盾" });
+      }
+      if (G.relics.includes("insight")) {
+        att.skills.forEach(sk => { sk.cdLeft = Math.max(0, sk.cdLeft - 1); });
+        ev(G, { t: "relicProc", x: att.x, y: att.y, text: "悟刀 · 技冷-1" });
+      }
       log(G, "弹反！" + def.name + "的攻势被荡开——其本回合失措。");
     }
     /* 情比金坚：相邻之敌，其伤加一 */
@@ -219,6 +271,8 @@
       if (hasP(att, "lowHpBonus") && att.hp < (att.passive.lowHpAt || 5)) dmg += att.passive.lowHpBonus;
       if (hasP(att, "grudgeStack") && att.st.grudge > 0) { dmg += 1; att.st.grudge--; }
     }
+    /* 刀伤倍率先算，弹反奖励后加，避免 knifeMul 覆盖 +2；血祭仍可翻倍此奖励。 */
+    if (counter) dmg += 2;
     if (kind === "skill" && opt.evenBonus && def.hp % 2 === 0) dmg += opt.evenBonus;
     /* 血祭之力（溅射不消耗） */
     if (att.st.emp > 0 && !opt.noEmp) { dmg *= 2; att.st.emp--; ev(G, { t: "emp", x: att.x, y: att.y }); }
@@ -231,15 +285,17 @@
       if (def.st.shield > 0) {
         const absorb = Math.min(def.st.shield, dmg);
         def.st.shield -= absorb; dmg -= absorb;
-        ev(G, { t: "shield", x: def.x, y: def.y, val: absorb });
+        ev(G, { t: "shield", uid: def.uid, x: def.x, y: def.y, fromX: att.x, fromY: att.y, val: absorb });
       }
       if (dmg > 0 && hasP(def, "takenReduce")) dmg = Math.max(1, dmg - def.passive.takenReduce);
       if (dmg > 0 && hasP(def, "firstHitReduce") && !def.firstHitTaken) { dmg = Math.max(0, dmg - def.passive.firstHitReduce); def.firstHitTaken = true; }
       if (dmg > 0 && hasP(def, "auraReduce") && adj(att, def)) dmg = Math.max(1, dmg - def.passive.auraReduce);
     }
-    if (dmg <= 0) { ev(G, { t: "hit", x: def.x, y: def.y, dmg: 0, crit, zero: true }); return 0; }
+    const impact = { uid: def.uid, sourceUid: att.uid, x: def.x, y: def.y,
+      fromX: att.x, fromY: att.y, hpBefore: def.hp, maxHp: def.maxHp, side: def.side };
+    if (dmg <= 0) { ev(G, { t: "hit", ...impact, dmg: 0, crit, zero: true }); return 0; }
     def.hp -= dmg;
-    ev(G, { t: "hit", x: def.x, y: def.y, dmg, crit });
+    ev(G, { t: "hit", ...impact, dmg, crit });
     /* 卧薪尝胆（被打者积怨） */
     if (hasP(def, "grudgeStack")) def.st.grudge = Math.min(def.passive.grudgeCap || 2, def.st.grudge + def.passive.grudgeStack);
     /* 附加效果 */
@@ -248,10 +304,13 @@
     if (opt.seal) def.st.disarm = Math.max(def.st.disarm, opt.seal);
     if (opt.poison) def.st.poison = Math.max(def.st.poison, opt.poison);
     if (opt.heal && !att.dead) heal(G, att, opt.heal);
+    let pushed = false;
     if (opt.push && !hasP(def, "immuneKnock") && G.floorDef.rule !== "suomen") {
       const Gr = G3();
       const dx = Math.sign(def.x - att.x), dy = Math.sign(def.y - att.y);
       const [px, py] = Gr.pushDest(G.map, def.x, def.y, dx, dy, opt.push, (x, y) => occupied(G, x, y));
+      pushed = px !== def.x || py !== def.y;
+      if (pushed) ev(G, { t: "push", uid: def.uid, x0: def.x, y0: def.y, x1: px, y1: py });
       def.x = px; def.y = py;
     }
     log(G, hitLine(G, att, def, dmg, kind, crit));
@@ -259,7 +318,11 @@
     /* 卧薪尝胆（刀卡）：玩家受伤积怨，下次刀击+1（至多2层） */
     if (def.side === "p" && G.relics.includes("grudge")) def.st.grudge = Math.min(2, def.st.grudge + 1);
     if (def.hp <= 0) kill(G, att, def);
-    else uprisingCheck(G);
+    else {
+      /* 伤害先结算，再处理落点，避免同一目标死亡/掉落被结算两次。 */
+      if (pushed && G3().at(G.map, def.x, def.y) === G3().TRAP) triggerTrap(G, def.x, def.y, def);
+      if (!def.dead && !G.over) uprisingCheck(G);
+    }
     return dmg;
   }
 
@@ -288,7 +351,7 @@
       return;
     }
     def.dead = true; def.hp = 0;
-    ev(G, { t: "die", x: def.x, y: def.y, glyph: def.glyph, color: def.color, boss: def.boss, chId: def.chId });
+    ev(G, { t: "die", uid: def.uid, x: def.x, y: def.y, glyph: def.glyph, color: def.color, boss: def.boss, chId: def.chId, side: def.side });
     log(G, def.side === "p" ? "汝倒于地下。" : def.name + "败。" + (def.boss ? "镇守已除！" : ""));
     if (def.side === "p") { playerDown(G); return; }
     if (att && att.side === "p") {
@@ -330,16 +393,8 @@
   }
 
   function bossDrop(G, def) {
-    const R = D2().RELICS;
-    const pool = Object.keys(R).filter(id => !G.relics.includes(id));
-    if (pool.length) {
-      const id = G.r.pick(pool);
-      G.relics.push(id);
-      ev(G, { t: "relic", id, name: R[id].name });
-      log(G, "得刀卡「" + R[id].name + "」——" + R[id].desc);
-      const T = G.tut || (G.tut = {});
-      if (!T.relic) { T.relic = true; ev(G, { t: "tut", k: "relic" }); }
-    }
+    MDG.Rewards.offer(G);
+    if (G.relicChoices && G.relicChoices.length) log(G, "镇守刀卡待选——三选一，按 B 也可稍后领取。");
     G.money += 15 + G.r.int(0, 10);
   }
 
@@ -385,19 +440,29 @@
   }
 
   /* ---------------- 回合开始（特则） ---------------- */
-  /* 亮刀破绽的出现率：可遇不可求，弹反才有价值（测试可钉为 0/1） */
-  let teleChance = 0.45;
+  /* 默认戒备结束必亮刀，节奏可学习；保留概率旋钮供受控测试使用。 */
+  let teleChance = 1;
   function roundStart(G) {
     G._firstKnifeUsed = false;
     G.enemies.forEach(u => { u.firstHitTaken = false; });
     const p = G.player;
-    /* 弹反窗口：邻敌亮刀示警（红框「！」）。刚被弹反者下回合有戒备，不出窗。 */
+    /* 普攻预警：蓄力与亮刀由 queueKnife 在上一回合结算时发出，
+       这里不再临到敌人出刀前才临时掷红框，保证玩家能在输入前看到它。 */
     G.enemies.forEach(u => {
+      normalizeAttackState(u);
       if (u.parryCd > 0) u.parryCd--;
-      const was = u.telegraph;
-      u.telegraph = !u.dead && u.aggro && u.st.stun === 0 && !(u.parryCd > 0) && !p.dead &&
-        G3().manh(u.x, u.y, p.x, p.y) === 1 && G.r.chance(teleChance);
-      if (u.telegraph && !was) {
+      const wasWarning = u.attackWarning;
+      const wasTelegraph = u.telegraph;
+      /* 预警只保留上一回合已经亮出的蓄力；本回合刚贴身的敌人由
+         queueKnife 在敌方行动末发出预警，避免玩家移动后仍看到假警报。 */
+      u.attackWarning = !!(u.atkWind > 0);
+      if (!u.attackWarning) u.telegraph = false;
+      if (u.attackWarning && !wasWarning) {
+        ev(G, { t: "attackWarning", x: u.x, y: u.y, name: u.name, uid: u.uid, turns: 1 });
+        const T = G.tut || (G.tut = {});
+        if (!T.attackWarning) { T.attackWarning = true; ev(G, { t: "tut", k: "attackWarning" }); }
+      }
+      if (u.telegraph && !wasTelegraph) {
         ev(G, { t: "telegraph", x: u.x, y: u.y, name: u.name });
         const T = G.tut || (G.tut = {});
         if (!T.telegraph) { T.telegraph = true; ev(G, { t: "tut", k: "telegraph" }); }
@@ -412,6 +477,7 @@
         if (p.hp <= 0) playerDown(G);
       }
     }
+    /* 落石陷阱：与陷阱同排同列者，回合末被砸（此处只在踩上时移除；排扫在 turnEnd） */
     if (G.floorDef.rule === "zhongshu") {
       if (treeCount(G) < 3) {
         for (let t = 0; t < 30; t++) {
@@ -430,15 +496,43 @@
   }
 
   /* ---------------- 敌人回合 ---------------- */
+  function queueKnife(G, u, victim) {
+    normalizeAttackState(u);
+    if (u.attackCd > 0 && !(u.chId === "mob" && u.attackCd === 1 && !u.atkWind)) {
+      clearAttackWindup(u);
+      ev(G, { t: "attackCooldown", x: u.x, y: u.y, uid: u.uid, who: u.name, turns: u.attackCd });
+      return;
+    }
+    if (u.atkWind > 0) {
+      strike(G, u, victim, "knife", { dmg: u.dmg });
+      return;
+    }
+    u.atkWind = 1;
+    u.windupAt = G.combatTime || 0;
+    u.aimX = victim.x; u.aimY = victim.y;
+    if (!u.attackWarning) {
+      u.attackWarning = true;
+      ev(G, { t: "attackWarning", x: u.x, y: u.y, name: u.name, uid: u.uid, turns: 1 });
+    }
+    /* 红色亮刀在前摇开始时决定并立刻发出，下一次玩家输入前即可弹反。 */
+    u.telegraph = !(u.parryCd > 0) && G.r.chance(teleChance);
+    if (u.telegraph) {
+      ev(G, { t: "telegraph", x: u.x, y: u.y, name: u.name });
+      const T = G.tut || (G.tut = {});
+      if (!T.telegraph) { T.telegraph = true; ev(G, { t: "tut", k: "telegraph" }); }
+    }
+    ev(G, { t: "windup", x: u.x, y: u.y, name: u.name });
+  }
   function enemiesAct(G) {
     const p = G.player;
     for (const u of G.enemies) {
       if (u.dead || u.side !== "e" || u.chId === "tree") continue;
+      normalizeAttackState(u);
       if (G.over) break;
       /* 晕眩 */
-      if (u.st.stun > 0) { u.st.stun--; ev(G, { t: "stunned", uid: u.uid }); continue; }
-      /* 被弹反：失措，本回合全行动作 */
-      if (u._parried) { u._parried = false; ev(G, { t: "stagger", x: u.x, y: u.y, name: u.name }); continue; }
+      if (u.st.stun > 0) { u.st.stun--; clearAttackWindup(u); ev(G, { t: "stunned", uid: u.uid }); continue; }
+      /* 被弹反：失措，本回合全行动作（攻击前摇一并打断） */
+      if (u._parried) { u._parried = false; clearAttackWindup(u); ev(G, { t: "stagger", x: u.x, y: u.y, name: u.name }); continue; }
       const Gr = G3();
       const dMan = Gr.manh(u.x, u.y, p.x, p.y);
       /* 惊动 */
@@ -471,21 +565,25 @@
         }
       }
       if (!u.aggro || p.dead) continue;
+      /* 玩家走开会打断已经亮出的普通攻击，预警不会隔墙追踪。 */
+      if (u.atkWind > 0 && !adj(u, p)) {
+        clearAttackWindup(u);
+      }
       /* 党争：二成机率误伤身边随机一人（含同门）——贴身混战时才可能打错 */
       let victim = p;
       if (G.floorDef.rule === "chaos" && adj(u, p) && G.r.chance(0.2)) {
         const cands = [p].concat(G.enemies).filter(o => o !== u && !o.dead && adj(u, o));
         if (cands.length) victim = G.r.pick(cands);
       }
+      /* 贴身只走普通攻击链：先预警/蓄势，下一轮才出刀；技能留给有距离的敌人。 */
+      if (adj(u, p)) {
+        queueKnife(G, u, victim);
+        continue;
+      }
       /* 用技（cd 好了且有合适目标，Boss 更积极） */
       if (u.st.disarm === 0 && u.skills.length && G.r.chance(u.boss ? 0.65 : 0.45)) {
         const sk = u.skills.find(s => s.cdLeft === 0 && aiSkillTarget(G, u, s));
         if (sk) { aiUseSkill(G, u, sk, aiSkillTarget(G, u, sk)); continue; }
-      }
-      /* 邻接则刀击 */
-      if (adj(u, p)) {
-        strike(G, u, victim, "knife", { dmg: u.dmg });
-        continue;
       }
       /* 否则趋近（一步或两步） */
       let steps = u.moveRange || 1;
@@ -498,7 +596,7 @@
         if (Gr.at(G.map, u.x, u.y) === Gr.TRAP) triggerTrap(G, u.x, u.y, u);
         if (u.dead || G.over) break;
       }
-      if (adj(u, p) && !u.dead) strike(G, u, p, "knife", { dmg: u.dmg });
+      if (adj(u, p) && !u.dead) queueKnife(G, u, p);
     }
   }
   function isSpecialTile(G, x, y) {
@@ -582,21 +680,41 @@
       if (u.hp <= 0) kill(G, null, u);
     });
     if (G.over) return;
-    /* 鲍鱼之肆（层特则）与神人臭气（被动）同源处理 */
-    const auraUnits = [];
-    if (G.floorDef.rule === "stench") auraUnits.push(p);
-    G.enemies.forEach(u => { if (!u.dead && hasP(u, "poisonAura")) auraUnits.push(u); });
-    auraUnits.forEach(src => {
-      const targets = src.side === "p" ? livingEnemies(G) : (p.dead ? [] : [p]);
-      targets.forEach(t => {
-        if (G3().manh(src.x, src.y, t.x, t.y) === 1) {
-          t.hp -= 1;
-          ev(G, { t: "hit", x: t.x, y: t.y, dmg: 1, aura: true });
-          log(G, "〔鲍鱼之肆〕" + (t.side === "p" ? "汝" : t.name) + "被蚀1血。");
-          if (t.hp <= 0) kill(G, src, t);
-        }
-      });
+    /* 鲍鱼之肆：相邻双方互蚀；神人臭气：神人单向蚀敌。 */
+    const auraHits = (src, targets) => targets.forEach(t => {
+      if (t.dead || G3().manh(src.x, src.y, t.x, t.y) !== 1) return;
+      t.hp -= 1;
+      ev(G, { t: "hit", x: t.x, y: t.y, dmg: 1, aura: true });
+      log(G, "〔鲍鱼之肆〕" + (t.side === "p" ? "汝" : t.name) + "被蚀1血。");
+      if (t.hp <= 0) kill(G, src, t);
     });
+    const foes = livingEnemies(G);
+    if (G.floorDef.rule === "stench") {
+      auraHits(p, foes);
+      if (!p.dead) foes.forEach(u => auraHits(u, [p]));
+    }
+    foes.forEach(u => { if (hasP(u, "poisonAura")) auraHits(u, p.dead ? [] : [p]); });
+    if (G.over) return;
+    /* 落石陷阱：与落石同排同列的活体各挨1石（每颗石只砸一次，砸完报废） */
+    const rockTraps = [];
+    for (let y = 0; y < G.map.h; y++) for (let x = 0; x < G.map.w; x++) {
+      if (G3().at(G.map, x, y) === G3().TRAP && trapKindOf(G, x, y) === "rock") rockTraps.push([x, y]);
+    }
+    const activeRocks = rockTraps.slice();
+    if (activeRocks.length) {
+      const victims = [p].concat(G.enemies).filter(u => !u.dead && activeRocks.some(([tx, ty]) => tx === u.x || ty === u.y));
+      for (const v of victims.slice(0, 3)) {
+        const ai = activeRocks.findIndex(([tx, ty]) => tx === v.x || ty === v.y);
+        if (ai < 0) continue;
+        const at = activeRocks.splice(ai, 1)[0];
+        G3().set(G.map, at[0], at[1], G3().FLOOR);
+        ev(G, { t: "trap", x: v.x, y: v.y, name: v.name, side: v.side, kind: "落石" });
+        v.hp -= 1;
+        ev(G, { t: "hit", x: v.x, y: v.y, dmg: 1, trap: true });
+        log(G, (v.side === "p" ? "头顶落石！砸去1血。" : "落石砸中" + v.name + "，损1血。"));
+        if (v.hp <= 0) { if (v.side === "p") playerDown(G); else kill(G, null, v); }
+      }
+    }
     if (G.over) return;
     /* 验算 */
     if (G.floorDef.rule === "yansuan") {
@@ -606,6 +724,8 @@
     /* 神人等被动每回合自愈类：无 */
     /* 冷却与计时 */
     [p].concat(G.enemies).forEach(u => {
+      normalizeAttackState(u);
+      if (u.attackCd > 0) u.attackCd--;
       u.skills.forEach(s => { if (s.cdLeft > 0) s.cdLeft--; });
       if (u.st.disarm > 0) u.st.disarm--;
       if (u.st.buffKnife > 0) u.st.buffKnife--;
@@ -656,7 +776,13 @@
     if (G.over) return G.ev = [], [];
     G.ev = [];
     const evs = G.ev;
+    if (action && action.t === "relic") {
+      MDG.Rewards.choose(G, action.id);
+      return evs.slice();
+    }
     if (!actionValid(G, action)) return evs.slice(); /* 时间不动 */
+    /* 浏览器传入可暂停的战斗时钟；无时钟的回合模拟每步推进650ms。 */
+    G.combatTime = Number.isFinite(action.atMs) ? Math.max(G.combatTime || 0, action.atMs) : (G.combatTime || 0) + 650;
     roundStart(G);
     if (!G.over) {
       const p = G.player;
@@ -691,17 +817,29 @@
     return evs.slice();
   }
 
-  /* ---- 陷阱：尖刺一次性，无视护盾，敌我皆可触发 ---- */
+  /* ---- 陷阱：尖刺（损3一次性）/ 毒沼（中毒3不消失）/ 落石（同排同列回合末砸1、一次性）；敌我皆可触发 ---- */
+  function trapKindOf(G, x, y) {
+    const kinds = G.map.trapKinds || {};
+    return kinds[x + "," + y] || "spike";
+  }
   function triggerTrap(G, x, y, u) {
-    G3().set(G.map, x, y, G3().FLOOR); /* 尖刺弹出后报废 */
-    ev(G, { t: "trap", x, y, name: u.name, side: u.side });
-    u.hp -= 3;
-    if (u.side === "p") {
-      log(G, "踩中陷阱！尖刺贯入，无视护盾损3血。");
-      if (u.hp <= 0) playerDown(G);
-    } else {
-      log(G, u.name + "踩中陷阱，尖刺贯入损3血。");
-      if (u.hp <= 0) kill(G, null, u);
+    const kind = D2().TRAPS[trapKindOf(G, x, y)] || D2().TRAPS.spike;
+    if (kind.once) G3().set(G.map, x, y, G3().FLOOR); /* 一次性触发后报废 */
+    ev(G, { t: "trap", x, y, name: u.name, side: u.side, kind: kind.name });
+    if (kind.dmg) {
+      u.hp -= kind.dmg;
+      if (u.side === "p") { log(G, "踩中" + kind.name + "！无视护盾损" + kind.dmg + "血。"); if (u.hp <= 0) playerDown(G); }
+      else { log(G, u.name + "踩中" + kind.name + "，损" + kind.dmg + "血。"); if (u.hp <= 0) kill(G, null, u); }
+    } else if (kind.poison) {
+      u.st.poison = Math.max(u.st.poison, kind.poison);
+      if (u.side === "p") log(G, "踏入毒沼！中毒" + kind.poison + "回合——沼泽不消失，绕着走。");
+      else log(G, u.name + "踏入毒沼，中毒。");
+    } else if (kind.rock) {
+      /* 落石为「标记型」：触发后移除，回合末砸下 */
+      u.hp -= 1;
+      ev(G, { t: "hit", x: u.x, y: u.y, dmg: 1, trap: true });
+      if (u.side === "p") { log(G, "头顶落石！砸去1血。"); if (u.hp <= 0) playerDown(G); }
+      else { log(G, "落石砸中" + u.name + "，损1血。"); if (u.hp <= 0) kill(G, null, u); }
     }
   }
 
@@ -820,7 +958,7 @@
       log(G, "开箱得「" + D.ITEMS[id].name + "」。");
     } else {
       const R = D2().RELICS;
-      const pool = Object.keys(R).filter(id => !G.relics.includes(id));
+      const pool = Object.keys(R).filter(id => !G.relics.includes(id) && !(G.relicChoices || []).includes(id));
       if (pool.length) {
         const id = G.r.pick(pool);
         G.relics.push(id);
@@ -973,6 +1111,13 @@
   }
   function deserialize(o) {
     const G = JSON.parse(JSON.stringify(o));
+    if (!G.combatTimingVersion) {
+      G.combatTimingVersion = 1; G.combatTime = 0;
+      for (const u of G.enemies || []) {
+        if (u.chId === 'mob') { u.dmg += 1; u.saw = Math.max(7, u.saw || 0); }
+        if (u.attackWarning) u.windupAt = 0;
+      }
+    }
     G.r = MDG.RNG.from(G.rs);
     G.ev = [];
     /* uid 续号：新造单位不与存档单位撞号 */
@@ -986,7 +1131,7 @@
   }
 
   MDG.Engine = {
-    newRunState, enterFloor, act, serialize, deserialize, saveString,
+    newRunState, enterFloor, act, serialize, deserialize, saveString, counterReady, PARRY_TIMING,
     unitAt, livingEnemies, stairsOpenNow, computeStairs, gateIds, strike, heal, addItem, log, ev,
     /* 供表现层查询 */
     tileAt: (G, x, y) => G3().at(G.map, x, y),

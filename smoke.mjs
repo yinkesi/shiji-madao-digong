@@ -66,7 +66,10 @@ const outcome = await page.evaluate(() => {
   while (!MD.Main.game.overShown && turns++ < 2500) {
     const G = G0();
     maxFloors = Math.max(maxFloors, G.floorIdx + 1);
-    if (G.floorIdx > 0) sawDescendFlag = true;
+    if (G.relicChoices && G.relicChoices.length) {
+      MD.Input.act({ t: "relic", id: G.relicChoices[0] });
+      continue;
+    }
     const p = G.player;
     const foes = MD.Engine.livingEnemies(G).filter(u => u.chId !== "tree");
     /* 梯开即下 */

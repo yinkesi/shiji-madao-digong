@@ -124,6 +124,7 @@
     MDG.UI.showFloorCard(game.G);
     if (fresh) toast("入第" + ["一", "二", "三", "四", "五", "六", "七", "八", "九"][game.G.floorIdx] + "层 · " + game.G.floorDef.name);
     if (!mainLoop) { mainLoop = true; requestAnimationFrame(loop); }
+    if (game.G.relicChoices && game.G.relicChoices.length) MDG.HUD.openRelicChoice();
   }
 
   function applyMetaBonuses() {
@@ -134,7 +135,8 @@
   function doAction(a, done) {
     if (game.animating || game.overShown) { if (done) done(); return; }
     const G = game.G;
-    const evs = MDG.Engine.act(G, a);
+    tickCombatClock(performance.now());
+    const evs = MDG.Engine.act(G, { ...a, atMs: G.combatTime || 0 });
     consumeEvents(evs);
     afterAction(done);
   }
@@ -163,6 +165,10 @@
       setTimeout(() => finishRun(), 900);
     }
     if (done) done();
+    if (!G.over && G.ev.some(e => e.t === "relicChoice")) {
+      MDG.Input.cancelAuto();
+      MDG.HUD.openRelicChoice();
+    }
     armIdle();
   }
 
@@ -180,14 +186,31 @@
 
   /* ---------------- 主循环 ---------------- */
   let mainLoop = false;
+  let clockGame = null, clockAt = 0, wasPaused = true, timingCue = "";
+  function tickCombatClock(now) {
+    const G = game.G, paused = idleBlocked();
+    if (G && G === clockGame && !paused && !wasPaused) G.combatTime = (G.combatTime || 0) + Math.max(0, now - clockAt);
+    clockGame = G; clockAt = now; wasPaused = paused;
+  }
   function loop(now) {
+    tickCombatClock(now || performance.now());
+    if (game.G) {
+      const cue = game.G.enemies.filter(u => MDG.Engine.counterReady(game.G, u)).map(u => u.uid).join(',');
+      if (cue !== timingCue) { timingCue = cue; MDG.HUD.refreshObjective(); }
+    }
     if (game.G) MDG.UI.draw(game.G, now || performance.now());
     requestAnimationFrame(loop);
   }
 
   /* ---------------- 闲置自动待机：静立约一息，时间自流（世界不等人） ---------------- */
   let idleTimer = null;
-  const IDLE_MS = 950;
+  const IDLE_MS = 780;
+  function idleDelay() {
+    const G = game.G;
+    const warnings = G ? G.enemies.filter(u => !u.dead && u.attackWarning && Number.isFinite(u.windupAt) &&
+      G._visible && G._visible[u.x + "," + u.y]) : [];
+    return warnings.length ? Math.max(16, Math.min(...warnings.map(u => u.windupAt + MDG.Engine.PARRY_TIMING.strike - (G.combatTime || 0)))) : IDLE_MS;
+  }
   function idleBlocked() {
     return !game.G || game.overShown || MDG.HUD.panelOpen() ||
       !$("prologue-screen").classList.contains("hidden") ||
@@ -198,9 +221,12 @@
   function armIdle() {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      if (idleBlocked()) { armIdle(); return; }
+      tickCombatClock(performance.now());
+      if (idleBlocked()) { idleTimer = setTimeout(armIdle, 100); return; }
+      const G = game.G;
+      if (G.enemies.some(u => !u.dead && u.attackWarning && Number.isFinite(u.windupAt) && G._visible?.[u.x + ',' + u.y]) && idleDelay() > 20) { armIdle(); return; }
       doAction({ t: "wait", auto: true });
-    }, IDLE_MS);
+    }, idleDelay());
   }
 
   /* ---------------- 装配 ---------------- */
@@ -233,9 +259,7 @@
     $("btn-dex").onclick = () => MDG.HUD.openDex();
     $("btn-sys").onclick = () => MDG.HUD.openSys();
     MDG.HUD.bind(game);
-    addEventListener("keydown", armIdle);
-    $("cv").addEventListener("click", armIdle);
-    addEventListener("pointerdown", armIdle);
+    /* 只有实际行动重排计时；无效按键/鼠标不能无限延后敌人出刀。 */
     armIdle();
     showTitle();
   }

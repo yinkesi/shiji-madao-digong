@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>看我｜马刀地宫试玩规则</title>
+<style>
+:root{color-scheme:dark;--bg:#070a10;--card:#171c25;--line:#343c4a;--text:#f4f1ea;--muted:#aeb7c5;--gold:#f1d8ab;--red:#ff806d;--green:#95ddb2}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(900px 420px at 50% -10%,#352a1d 0,#111722 42%,var(--bg) 78%);color:var(--text);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+main{width:min(900px,calc(100% - 32px));margin:0 auto;padding:36px 0 64px}.eyebrow{color:var(--gold);letter-spacing:.2em;font-size:13px}.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:8px 0 28px}.hero h1{margin:0;font-size:clamp(56px,12vw,124px);line-height:.95;letter-spacing:.04em;color:#fff1d2;text-shadow:0 4px 30px #d1a75c55}.hero p{max-width:360px;margin:0;color:var(--muted)}
+.notice{border:2px solid var(--red);background:#5c201b66;border-radius:20px;padding:18px 22px;margin-bottom:18px;box-shadow:0 0 34px #ff806d22}.notice b{color:#ffd2c6;font-size:20px}.notice span{color:#fff;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:#171c25dd;border:1px solid var(--line);border-radius:16px;padding:18px 20px;backdrop-filter:blur(12px)}.card h2{font-size:18px;margin:0 0 8px;color:var(--gold)}.card p{margin:0;color:var(--muted)}.card strong{color:var(--text)}.timing{border-color:#d1af75;background:#332b1eaa}.danger{border-color:#9a4b40}.safe{border-color:#4a8061}
+kbd{display:inline-block;min-width:1.7em;padding:1px 7px;border:1px solid #697386;border-radius:7px;background:#242b36;color:#fff;text-align:center;font-weight:700;line-height:1.45;box-shadow:inset 0 -2px #111722}.go{display:flex;justify-content:center;margin-top:24px}.go a{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 28px;border-radius:14px;background:var(--gold);color:#292217;text-decoration:none;font-weight:750;box-shadow:0 10px 30px #d1af7544}.go a:hover{background:#ffe7bf}.foot{margin-top:26px;text-align:center;color:#758094;font-size:13px}.foot a{color:var(--gold)}
+@media(max-width:650px){main{padding-top:24px}.hero{display:block}.hero p{margin-top:18px}.grid{grid-template-columns:1fr}.card{padding:16px}.notice{padding:16px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">实验史记 · 马刀地宫　同学试玩版</div>
+  <section class="hero"><h1>看我</h1><p>先看这一页，再点下面的“进入游戏”。这是一个回合制地宫游戏：你走一步，敌人也走一步。</p></section>
+  <div class="notice"><b>最重要的一条：</b> <span>敌人亮红框不等于整段都能弹反。</span> 先等红框变成金色、出现“J反”，只在那个短窗口按 <kbd>J</kbd>。</div>
+  <section class="grid">
+    <article class="card"><h2>① 怎么移动</h2><p><kbd>WASD</kbd> 或方向键：走一格。<kbd>Space</kbd>：原地待机。每次有效行动都会推进敌人回合。</p></article>
+    <article class="card"><h2>② 怎么攻击</h2><p><kbd>J</kbd>：攻击或互动，不会自动向前走。敌人在相邻格时按 J 出刀；木箱、灶台、楼梯也用 J。</p></article>
+    <article class="card timing"><h2>③ 弹反时机（看清再按）</h2><p>敌人先蓄力并亮红框；蓄力末段才变成金色“J反”，<strong>只有约180毫秒</strong>有效。按早：普通攻击；按晚：你会挨刀。</p></article>
+    <article class="card danger"><h2>④ 敌人现在很凶</h2><p>小兵基础攻击伤害为 2，贴身时两拍左右就会再攻一次。看到黄色蓄力标志，赶紧走开或用控制技打断。</p></article>
+    <article class="card"><h2>⑤ 其他常用按键</h2><p><kbd>U</kbd>：血祭　<kbd>B</kbd>：行囊　<kbd>C</kbd>：刀谱　<kbd>V</kbd>：图鉴　<kbd>H</kbd>：帮助　<kbd>Tab</kbd>：查看格子</p></article>
+    <article class="card danger"><h2>⑥ 陷阱别硬踩</h2><p>尖刺会直接掉血，毒沼会中毒，落石会在回合末砸人。按 <kbd>Tab</kbd> 查看格子信息；敌人也会踩陷阱，可以引它们过去。</p></article>
+    <article class="card safe"><h2>⑦ 你要做什么</h2><p>每层找到楼梯并击败镇守。灶台可以回血和清技能冷却，残血别贪刀。</p></article>
+    <article class="card"><h2>⑧ 试玩提示</h2><p>这是随机地宫，不一定每局都一样。阵亡会保留部分局外成长；遇到不懂的规则，游戏中按 <kbd>H</kbd> 看帮助。</p></article>
+  </section>
+  <div class="go"><a href="实验史记·马刀地宫.html">进入游戏　→</a></div>
+  <div class="foot">无需安装 · 无需联网 · 建议使用 Chrome 或 Edge　|　打不开本页？请看同目录的 <a href="00_看我_先读规则.txt">纯文本规则</a></div>
+</main>
+</body>
+</html>

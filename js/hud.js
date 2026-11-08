@@ -10,7 +10,12 @@
 
   let game = null; // 由 main.js 注入 {G, meta, onAct, onShopBuy...}
 
-  function bind(g) { game = g; }
+  function bind(g) {
+    game = g;
+    /* 每轮/续行都从当前存档的记事开始，避免上一轮的死亡记录污染新局。 */
+    const box = $("log");
+    if (box) box.replaceChildren();
+  }
 
   /* ---------------- 引导：教学 toast 与目标提示条 ---------------- */
   const TUT_TEXT = {
@@ -19,11 +24,12 @@
     chest: "前方有【木箱】——朝它按 J 开箱：钱、吃食或刀卡",
     scroll: "前方有【史料】——走过即拾，文脉+1",
     shop: "前方有【小卖部】——按 J 进店，零花钱购物（↑↓ 选、Enter 买）",
-    trap: "前方有【陷阱】——尖刺无视护盾，踩上损3血且报废；也可以引敌人踩上去",
+    trap: "前方有【陷阱】——尖刺、毒沼、落石各有不同；看清标记再走，也可以引敌人踩上去",
     stairsLocked: "前方是【楼梯】——被镇守封着；先寻镇守斩之，梯方开",
     stairsOpen: "【楼梯已开】——站上楼梯按 J，下行下一层",
     learn: "录技成功！按 U/I/O/P（或数字键）施放，详见刀谱（C）",
-    telegraph: "敌露出亮刀破绽（红框）！本回合内按 J 迎击＝弹反：抵消其攻势+2伤（破绽可遇不可求）",
+    telegraph: "看刀势：蓄力末段金色 J反 仅亮180毫秒。按早是普攻，按晚会挨刀；反后黄标戒备请走位。",
+    attackWarning: "敌人蓄力：走开或控制打断。红框不代表整段可反，等金色 J反 再按。",
     relic: "得刀卡【遗物】——本轮全程有效，详见行囊（B）"
   };
   function pushTut(evs) {
@@ -34,14 +40,46 @@
     });
   }
   /* 目标提示条：按局势给一句话 + 键位提示 */
+  function inspectTile(G, x, y) {
+    const k = x + "," + y;
+    if (!G.explored || !G.explored[k]) return "未探索区域 · 先靠近观察";
+    const visible = G._visible && G._visible[k];
+    const u = visible ? MDG.Engine.unitAt(G, x, y) : null;
+    if (u && u.side === "e") {
+      const intent = u.st.stun > 0 ? "晕眩" : u.telegraph ? "红框蓄力：等金色J反，窗口180ms" :
+        u.attackWarning ? "黄标：下一轮出刀，须走位/控制" : u.attackCd > 0 ? "收刀恢复中" : "尚未蓄力";
+      return u.name + " · 血 " + u.hp + "/" + u.maxHp + " · 基础刀伤 " + u.dmg + " · " + intent +
+        (u.passive ? " · 被动：" + u.passive.name : "");
+    }
+    const tile = MDG.Grid.at(G.map, x, y);
+    if (tile === MDG.Grid.TRAP) {
+      const kind = MDG.DATA.TRAPS[(G.map.trapKinds || {})[k] || "spike"];
+      return kind.name + " · " + kind.desc + " 可引敌或击退敌人触发。";
+    }
+    const names = ["墙体，不可通行", "石板地面", "走廊", "下行楼梯", "木箱，邻格J开启", "史料，走过拾取", "灶间，邻格J休息", "树木，J击碎", "商摊，邻格J购买"];
+    return (names[tile] || "地面") + (visible ? "" : " · 已探索，当前不可见") + " · Esc 退出查看";
+  }
   function refreshObjective() {
     const G = game.G;
     if (!G || G.over) return;
     const bar = document.getElementById("objective-bar");
     if (!bar) return;
+    if (MDG.Input && MDG.Input.cursorActive() && MDG.Input.cursorMode() === "free") {
+      const [x, y] = MDG.Input.cursorPos();
+      const text = document.getElementById("obj-text");
+      text.textContent = inspectTile(G, x, y); text.dataset.last = "";
+      bar.style.display = "";
+      return;
+    }
     const key = (k) => "<kbd>" + k + "</kbd>";
     let html = "";
-    if (MDG.Engine.stairsOpenNow(G)) {
+    const counters = G.enemies.filter(u => MDG.Engine.counterReady(G, u) &&
+      G._visible && G._visible[u.x + "," + u.y] &&
+      MDG.Grid.manh(G.player.x, G.player.y, u.x, u.y) === 1);
+    if (counters.length) {
+      html = key("J") + " 现在弹反！抵消该敌攻势 +2伤（窗口180ms）" +
+        (counters.length > 1 ? " · 多敌亮刀，只能反一名，注意撤步" : "");
+    } else if (MDG.Engine.stairsOpenNow(G)) {
       html = "楼梯已开——寻梯按 " + key("J") + " 下行（小地图金点）";
     } else {
       const foes = MDG.Engine.livingEnemies(G).filter(u => u.chId !== "tree");
@@ -49,8 +87,8 @@
       const boss = foes.find(u => u.boss);
       if (G.player.hp < G.player.maxHp * 0.4 && G.items.some(i => i.id === "fantuan" || i.id === "mantou")) {
         html = "血量告急——按 " + key("B") + " 开行囊吃口饭";
-      } else if (foes.some(u => u.telegraph)) {
-        html = "敌已亮刀（红框！）——" + key("J") + " 迎击＝弹反：抵消攻势+2伤";
+      } else if (foes.some(u => u.attackWarning && G._visible && G._visible[u.x + "," + u.y])) {
+        html = "敌在蓄力（黄标）——下一轮出刀：走位避开或用控制技打断";
       } else if (hunters.length) {
         html = hunters[0].name + "追上来了——" + key("J") + " 迎击，或走位甩开";
       } else if (G.player.st.disarm > 0) {
@@ -77,13 +115,13 @@
     $("hud-floor-num").textContent = "第" + ["一", "二", "三", "四", "五", "六", "七", "八", "九"][G.floorIdx] + "层 ·";
     $("hud-floor-name").textContent = def.name + (G.player.bossTag ? "" : "");
     const rule = $("hud-rule");
-    rule.textContent = def.rule ? "〔" + def.rule + "〕" : "";
+    rule.textContent = def.rule ? "〔" + (def.ruleDesc || def.rule).split("：")[0] + "〕" : "";
     rule.title = def.ruleDesc || "";
     rule.style.display = def.rule ? "" : "none";
     $("bar-hp").style.width = Math.max(0, G.player.hp / G.player.maxHp * 100) + "%";
     $("bar-hp-text").textContent = Math.max(0, G.player.hp) + " / " + G.player.maxHp;
     $("bar-emp").style.width = (G.player.st.emp > 0 ? Math.min(100, G.player.st.emp * 50) : 0) + "%";
-    $("bar-shield").textContent = (G.player.st.shield > 0 ? "盾 " + G.player.st.shield : "") + (G.player.st.buffKnife > 0 ? "　黑棒 " + G.player.st.buffKnife : "") + (G.player.lethalUsed ? "　命硬已用" : "");
+    $("bar-shield").textContent = (G.player.st.shield > 0 ? "盾 " + G.player.st.shield : "") + (G.player.st.buffKnife > 0 ? "　黑棒 " + G.player.st.buffKnife : "") + (G.player.attackCd > 0 ? "　刀冷 " + G.player.attackCd : "") + (G.player.lethalUsed ? "　命硬已用" : "");
     $("hud-cash").textContent = G.money;
     $("hud-wemai").textContent = G.wemai;
     $("hud-kills").textContent = "斩 " + G.kills;
@@ -128,23 +166,64 @@
   }
 
   /* ---------------- 通用面板 ---------------- */
+  let panelReturnFocus = null;
   function openPanel(title, render) {
+    if (!panelOpen()) panelReturnFocus = document.activeElement;
     $("panel-title").textContent = title;
     const body = $("panel-body");
     body.innerHTML = "";
     render(body);
     $("panel-mask").classList.remove("hidden");
+    $("panel-close").focus({ preventScroll: true });
     MDG.APP.sfx.ui();
   }
-  function closePanel() { $("panel-mask").classList.add("hidden"); }
+  function closePanel() {
+    $("panel-mask").classList.add("hidden");
+    if (panelReturnFocus?.isConnected) panelReturnFocus.focus({ preventScroll: true });
+    panelReturnFocus = null;
+  }
   const panelOpen = () => !$("panel-mask").classList.contains("hidden");
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Tab" || !panelOpen()) return;
+    const controls = [...$("panel").querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')].filter(el => el.getClientRects().length);
+    const index = controls.indexOf(document.activeElement);
+    if (!controls.length) return;
+    e.preventDefault();
+    controls[(index + (e.shiftKey ? -1 : 1) + controls.length) % controls.length].focus();
+  });
 
   function row(body) { return el("div", "row"); }
+
+  function openRelicChoice() {
+    const G = game.G;
+    if (!G || !G.relicChoices || !G.relicChoices.length) return;
+    openPanel("镇守战利品 · 刀卡择一", body => {
+      body.appendChild(el("p", "muted", "↑↓ 选择，Enter 领取。选择不耗回合；Esc 暂存，按 B 可再领取。"));
+      for (const id of G.relicChoices) {
+        const def = MDG.DATA.RELICS[id];
+        const r = row(body);
+        r.innerHTML = `<div class="grow"><b>${def.name}</b><div class="muted">${def.desc}</div></div>`;
+        const button = el("button", "pbtn", "选取");
+        button.onclick = () => {
+          closePanel();
+          game.doAction({ t: "relic", id });
+        };
+        r.appendChild(button); body.appendChild(r);
+      }
+    });
+  }
 
   /* ---------------- 行囊 ---------------- */
   function openBag() {
     const G = game.G;
     openPanel("行囊", body => {
+      if (G.relicChoices && G.relicChoices.length) {
+        const r = row(body);
+        r.appendChild(el("div", "grow", "镇守刀卡待选 · 尚有" + G.relicDrafts + "份"));
+        const button = el("button", "pbtn", "领取刀卡");
+        button.onclick = openRelicChoice;
+        r.appendChild(button); body.appendChild(r);
+      }
       if (!G.items.length) body.appendChild(el("div", "muted", "行囊空空。（小卖部在 2/4/6/8 层）"));
       G.items.forEach((it, i) => {
         const def = MDG.DATA.ITEMS[it.id];
@@ -318,13 +397,17 @@
         <h5>目标</h5>深入地宫九层，斩各层镇守，第九层收卷。<br>
         <h5>操作</h5>
         · 方向键 / WASD：走一格；撞敌即刀击，撞箱/灶/梯/商摊即互动<br>
-        · 数字键 1-9：用技（部分技需再点目标）　· 空格：待机　· I：行囊　· M：静音　· Esc：关面板<br>
-        · 鼠标：点邻格互动；点远处自动走（见敌即停）
+        · U/I/O/P 或数字键 1-9：用技　· 空格：待机　· B：行囊　· C：刀谱　· V：图鉴　· M：静音<br>
+        · Tab：移光标查看敌人血量、出招状态和陷阱规则；查看时暂停自动回合，Esc退出。<br>
+        · 鼠标：点邻格互动；点远处沿已探索安全路线自动走，遇敌停止，不自动踏入陷阱。
         <h5>规矩</h5>
         · 走一步、世界走一步。<b>急击勿失</b>：对未惊动之敌先手一刀 +2。<br>
-        · <b>击破回血2</b>。胜一场，录一技——首杀有名之角色，录其技入谱。<br>
+        · <b>击破回血3</b>。胜一场，录一技——首杀有名之角色，录其技入谱。<br>
+        · 镇守刀卡<b>三选一</b>，选择不耗回合，Esc暂存、B领取。反守为攻：弹反补盾；见招悟刀：弹反额外缩短技能冷却。<br>
         · 每层有<b>特则</b>（顶栏红签，悬停可读）：难在机制，不在数值。<br>
+        · 小兵基础刀伤2，收刀与下次蓄力重叠。红框先蓄力，600ms后亮金色 <b>J反</b>，仅180ms有效；按早是普攻，按晚不能抵消攻击。成功+2伤、冷却中也可用；黄标戒备不能弹反，多敌只反一名。<br>
         · <b>灶间</b>：血满、技冷清——进镇守房前必歇。<b>史料</b>：拾之得文脉。<br>
+        · <b>陷阱</b>：尖刺一次性重伤、毒沼持续中毒、落石沿行列落下；敌人也会踩。<br>
         · 阵亡不白死：折算<b>文脉</b>，于「修炼」购永久之强；首斩镇守者入点将名册。
         <h5>九层</h5>
         跑道之下 → 异能之窟 → 三国刀廊 → 协会堂 → 合流渊 → 禁令厅 → 神算之间 → 崇国庭 → 终焉之庭
@@ -373,5 +456,5 @@
     if (!holdHidden) $("end-screen").classList.remove("hidden");
   }
 
-  MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, pushTut, refreshObjective, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd };
+  MDG.HUD = { bind, refreshHUD, refreshSkillbar, pushLog, pushTut, refreshObjective, openBag, openBlades, openDex, openCult, openRoster, openShop, openSys, openHelp, openPanel, closePanel, panelOpen, showEnd, openRelicChoice };
 })();

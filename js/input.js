@@ -84,10 +84,12 @@
     }
     usingMouse = false;
     if (tip) MDG.APP.toast(tip);
+    MDG.HUD.refreshObjective();
   }
   function disarmCursor() {
     cursor = -1; cursorMode = "free";
     MDG.UI.armed.set(-1); itemArmed = -1;
+    MDG.HUD.refreshObjective();
   }
   const cursorActive = () => Array.isArray(cursor);
   function clampCursor() {
@@ -101,6 +103,7 @@
     clampCursor();
     usingMouse = false;
     MDG.APP.sfx.ui();
+    MDG.HUD.refreshObjective();
   }
   /* 光标确认：按模式分发 */
   function cursorConfirm() {
@@ -167,7 +170,7 @@
       if (u && u.side === "e" && !u.dead) adj.push({ dx, dy, u, align: dx * facing[0] + dy * facing[1] });
     }
     if (adj.length) {
-      adj.sort((a, b) => (b.align - a.align) || (a.u.hp - b.u.hp));
+      adj.sort((a, b) => (Number(MDG.Engine.counterReady(G, b.u)) - Number(MDG.Engine.counterReady(G, a.u))) || (b.align - a.align) || (a.u.hp - b.u.hp));
       target = adj[0];
       facing = [target.dx, target.dy];
       act({ t: "move", dx: target.dx, dy: target.dy });
@@ -205,8 +208,9 @@
     }
     if (d === 0) { act({ t: "wait" }); return; }
     faceToward(wx, wy);
-    const path = pathTo(G, G.player.x, G.player.y, wx, wy);
+    const path = MDG.Navigation.safePath(G, G.player.x, G.player.y, wx, wy);
     if (path) { autoWalk = { path, i: 0 }; stepAuto(); }
+    else MDG.APP.toast("没有已探索的安全路线；未知区域或陷阱请逐格前进（Tab 可查看）");
   }
 
   function getCam() {
@@ -215,35 +219,6 @@
   let cv = null;
   function setCanvas(c) { cv = c; }
 
-  function pathTo(G, sx, sy, tx, ty) {
-    const Gr = MDG.Grid;
-    const prev = new Int32Array(G.map.w * G.map.h).fill(-1);
-    const q = [sy * G.map.w + sx];
-    prev[sy * G.map.w + sx] = sy * G.map.w + sx;
-    while (q.length) {
-      const cur = q.shift();
-      const cx = cur % G.map.w, cy = (cur - cx) / G.map.w;
-      if (cx === tx && cy === ty) break;
-      for (const [dx, dy] of Gr.DIRS) {
-        const nx = cx + dx, ny = cy + dy;
-        if (!Gr.inB(G.map, nx, ny)) continue;
-        const ni = ny * G.map.w + nx;
-        if (prev[ni] !== -1) continue;
-        if (nx === tx && ny === ty) { prev[ni] = cur; q.push(ni); continue; }
-        if (!Gr.walkable(G.map, nx, ny)) continue;
-        if ([Gr.CHEST, Gr.SHOP, Gr.CAMPFIRE, Gr.STAIRS].includes(Gr.at(G.map, nx, ny))) continue;
-        if (MDG.Engine.unitAt(G, nx, ny)) continue;
-        prev[ni] = cur; q.push(ni);
-      }
-    }
-    const ti = ty * G.map.w + tx;
-    if (prev[ti] === -1) return null;
-    const path = [];
-    let cur = ti;
-    while (cur !== sy * G.map.w + sx) { path.push([cur % G.map.w, Math.floor(cur / G.map.w)]); cur = prev[cur]; }
-    path.reverse();
-    return path;
-  }
 
   function stepAuto() {
     if (!autoWalk) return;
@@ -255,6 +230,10 @@
     const p = autoWalk;
     if (p.i >= p.path.length) { cancelAuto(); return; }
     const [nx, ny] = p.path[p.i];
+    if (MDG.Grid.at(G.map, nx, ny) === MDG.Grid.TRAP ||
+        !G.explored || !G.explored[nx + "," + ny]) {
+      cancelAuto(); MDG.APP.toast("前方危险或未知——自动行走止"); return;
+    }
     const dx = nx - G.player.x, dy = ny - G.player.y;
     if (Math.abs(dx) + Math.abs(dy) !== 1) { cancelAuto(); return; }
     face(dx, dy);

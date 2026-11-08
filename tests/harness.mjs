@@ -8,7 +8,7 @@ import vm from "vm";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
 
-export const CORE_FILES = ["js/rng.js", "js/grid.js", "js/data.js", "js/gen.js", "js/engine.js", "js/meta.js", "js/run.js"];
+export const CORE_FILES = ["js/rng.js", "js/grid.js", "js/data.js", "js/gen.js", "js/rewards.js", "js/engine.js", "js/navigation.js", "js/meta.js", "js/run.js"];
 
 export function loadCore() {
   const ctx = { console };

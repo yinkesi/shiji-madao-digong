@@ -161,6 +161,8 @@ console.log("8 H 帮助:", helpTxt.includes("目标") ? "OK" : "FAIL「" + helpT
   await page.keyboard.press("d"); await page.waitForTimeout(220); // 面朝右走一步
   await page.evaluate(() => {
     const G = MDG.Main.game.G;
+    /* 清掉前面 8d 子步骤留下的同格测试桩，避免 J 命中旧桩造成随机失败。 */
+    G.enemies = [];
     const foe = { uid: "kb3", chId: "mob", name: "左敌", glyph: "左", color: "#333", side: "e",
       x: G.player.x - 1, y: G.player.y, hp: 30, maxHp: 30, dmg: 0, saw: 0, moveRange: 1, passive: null, skills: [],
       st: { stun: 0, disarm: 0, poison: 0, shield: 0, emp: 0, grudge: 0, buffKnife: 0 },

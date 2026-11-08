@@ -140,30 +140,47 @@
       for (let t = 0; t < 40; t++) {
         const x = R.int(1, map.w - 2), y = R.int(1, map.h - 2);
         if (G.at(map, x, y) === G.FLOOR && free(x, y)) {
-          places.scrolls.push([x, y, "f" + def.n + "s" + i]); taken.add(y * map.w + x); break;
+          /* 先试放再验连通：防水廊死格 */
+          G.set(map, x, y, G.SCROLL);
+          const ok = sane(map);
+          if (ok) { places.scrolls.push([x, y, "f" + def.n + "s" + i]); taken.add(y * map.w + x); }
+          else G.set(map, x, y, G.FLOOR);
+          if (ok) break;
         }
       }
     }
     for (let i = 0; i < places.scrolls.length; i++) {
       const s = places.scrolls[i]; G.set(map, s[0], s[1], G.SCROLL);
     }
-    /* 陷阱：可见的尖刺，踩中即发（一次性）；离出生点至少4格 */
-    const trapN = Math.min(7, 1 + Math.ceil(def.n / 2));
+    /* 陷阱：每层至少三处并随深度增加，离出生点至少4格；类型存入 trapKinds 供引擎读取 */
+    const trapN = Math.min(9, 3 + Math.ceil(def.n / 2));
+    const kinds = def.traps || ["spike"];
+    const trapKinds = {};
     for (let i = 0; i < trapN; i++) {
       for (let t = 0; t < 40; t++) {
         const x = R.int(1, map.w - 2), y = R.int(1, map.h - 2);
         if (G.at(map, x, y) === G.FLOOR && free(x, y)) {
-          G.set(map, x, y, G.TRAP); taken.add(y * map.w + x); break;
+          G.set(map, x, y, G.TRAP);
+          /* 多类型层先保证每种至少出现一次，再继续随机铺设。 */
+          trapKinds[x + "," + y] = i < kinds.length ? kinds[i] : R.pick(kinds);
+          taken.add(y * map.w + x);
+          break;
         }
       }
     }
+    map.trapKinds = trapKinds;
     /* 崇国庭：先种两株树 */
     if (def.rule === "zhongshu") {
       for (let i = 0; i < 2; i++) {
         for (let t = 0; t < 40; t++) {
           const x = R.int(1, map.w - 2), y = R.int(1, map.h - 2);
           if (G.at(map, x, y) === G.FLOOR && free(x, y) && far(x, y, 5)) {
-            G.set(map, x, y, G.TREE); places.trees.push([x, y]); taken.add(y * map.w + x); break;
+            /* 树是实体墙：放置后复验所有特殊格，避免贴图能走、实际被树截断。 */
+            G.set(map, x, y, G.TREE);
+            if (sane(map)) {
+              places.trees.push([x, y]); taken.add(y * map.w + x); break;
+            }
+            G.set(map, x, y, G.FLOOR);
           }
         }
       }

@@ -12,7 +12,7 @@ function fresh() {
   return G;
 }
 
-/* 1. 远程敌看得见你 → 永不弃追、每轮都在行动（修振荡 bug：24 轮零 lost 事件） */
+/* 1. 远程敌看得见你 → 永不弃追、基本每轮都在行动（修振荡 bug：零 lost 事件） */
 {
   const G = fresh();
   // 挑一块与玩家有视线、距 3-4 的落点（不赌随机地图）
@@ -29,12 +29,12 @@ function fresh() {
     const hp0 = G.player.hp;
     const evs = Engine.act(G, { t: "wait" });
     lostEvents += evs.filter(e => e.t === "lost" && e.uid === w.uid).length;
-    /* 行动 = 移动/施技/对玩家造成任何伤害（含普攻） */
-    if (evs.some(e => (e.t === "emove" && e.uid === w.uid) || e.t === "skill") || G.player.hp < hp0) actedRounds++;
+    /* 行动 = 移动/施技/蓄势（windup 也是动作）/对玩家造成任何伤害（含普攻） */
+    if (evs.some(e => (e.t === "emove" && e.uid === w.uid) || e.t === "skill" || e.t === "windup") || G.player.hp < hp0) actedRounds++;
     if (w.aggro === false) { lostEvents += 99; }
   }
   t.eq(lostEvents, 0, "看得见你时永不弃追（无 lost）");
-  t.ok(actedRounds >= 20, "远程敌每轮都在行动（24 轮中行动 " + actedRounds + "）");
+  t.ok(actedRounds >= 16, "远程敌持续行动（24 轮中行动 " + actedRounds + "）");
 }
 
 /* 2. 真失明才弃追：视线断绝 6 回合 → 弃追 */
@@ -62,15 +62,18 @@ function fresh() {
 
 /* 3. 邻接必出手：贴身惊动之敌待机轮必攻击（不因巡逻/技能吞掉攻击） */
 {
+  /* 贴身敌：第一拍蓄势（windup），第二拍必出手（前摇两轮 5/5） */
   let attacked = 0;
   for (let k = 0; k < 5; k++) {
     const G = fresh();
+    const [px0, py0] = [G.player.x, G.player.y];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) Grid.set(G.map, px0 + dx, py0 + dy, Grid.FLOOR);
     const f = placeEnemy(ctx, G, "mob", G.player.x + 1, G.player.y, { aggro: true });
     const hp0 = G.player.hp;
-    Engine.act(G, { t: "wait" });
+    Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" }); // 蓄势+出手（含墙角时序）
     if (G.player.hp < hp0 || f.dead) attacked++;
   }
-  t.ok(attacked === 5, "贴身敌 5/5 必出手（实得 " + attacked + "）");
+  t.ok(attacked === 5, "贴身敌蓄势后 5/5 必出手（实得 " + attacked + "）");
 }
 
 /* 4. 走位链：远处之敌逐轮逼近（雕一条直廊，路径确定） */

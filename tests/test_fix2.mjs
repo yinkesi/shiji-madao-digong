@@ -72,6 +72,7 @@ function fresh() {
   const b = placeEnemy(ctx, G, "mob", G.player.x - 1, G.player.y, { aggro: true });
   a.hp = 99; a.maxHp = 99; b.hp = 99; b.maxHp = 99;
   G.player.hp = 500;
+  Engine.act(G, { t: "wait" }); // 普攻恢复一回合
   Engine.act(G, { t: "move", dx: 1, dy: 0 });
   t.ok(a.hp < 99 || a.dead, "主目标受击");
   t.eq(b.hp, a.hp, "溅射与主目标同伤");
@@ -95,7 +96,7 @@ function fresh() {
   G.relics.push("grudge");
   const foe = placeEnemy(ctx, G, "mob", G.player.x + 1, G.player.y, { aggro: true });
   foe.hp = 99; foe.maxHp = 99; foe.dmg = 1;
-  Engine.act(G, { t: "wait" }); // 挨打积怨（1伤桩，999血无所谓）
+  Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" }); Engine.act(G, { t: "wait" }); // 蓄势毕出手
   t.eq(G.player.st.grudge, 1, "受伤积怨1层");
   Engine.act(G, { t: "move", dx: 1, dy: 0 }); // 带怨还击
   t.eq(foe.hp, 96, "怨愤刀击+1（伤3）");
@@ -127,6 +128,7 @@ function fresh() {
   t.eq(c.dead, false, "免死触发未死");
   t.eq(c.hp, 4, "留1回3（4血）");
   t.eq(c.lethalUsed, true, "每场一次");
+  Engine.act(G, { t: "wait" }); // 普攻恢复一回合
   Engine.act(G, { t: "move", dx: 1, dy: 0 });
   t.ok(c.hp <= 2 || c.dead, "第二次不再生效（4-2=2）");
 }
